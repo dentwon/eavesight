@@ -1,0 +1,288 @@
+// StormVault Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  passwordHash   String
+  firstName      String?
+  lastName       String?
+  role           UserRole  @default(USER)
+  emailVerified  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  organizationMemberships OrganizationMember[]
+  leads                   Lead[]              @relation("Assignee")
+  sessions                Session[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Session model for refresh tokens
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// Organization model
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  plan      Plan    @default(STARTER)
+  logo      String?
+  website   String?
+  phone     String?
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members  OrganizationMember[]
+  leads    Lead[]
+  apiKeys  ApiKey[]
+
+  @@map("organizations")
+}
+
+enum Plan {
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgMemberRole   @default(MEMBER)
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+enum OrgMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+// API Key model for enterprise customers
+model ApiKey {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  key       String   @unique
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// Property model
+model Property {
+  id          String   @id @default(cuid())
+  
+  // Address
+  address     String
+  address2    String?
+  city        String
+  state       String
+  zip         String   @db.VarChar(10)
+  
+  // Coordinates
+  lat         Float?
+  lon         Float?
+  
+  // Property details
+  yearBuilt   Int?
+  parcelId    String?
+  county      String?
+  
+  // Roof data
+  roofAge     Int?
+  roofYear    Int?
+  roofMaterial String?
+  
+  // External IDs
+  externalId  String?
+  source      String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  propertyStorms PropertyStorm[]
+  leads         Lead[]
+  
+  @@index([lat, lon])
+  @@index([state, city])
+  @@index([parcelId])
+  @@map("properties")
+}
+
+// Storm Event model
+model StormEvent {
+  id          String   @id @default(cuid())
+  
+  // Event details
+  type        StormType
+  severity    Severity?
+  date        DateTime
+  endDate     DateTime?
+  
+  // Location
+  city        String?
+  county      String?
+  state       String  @db.VarChar(2)
+  
+  // Geometry (stored as JSON for PostGIS)
+  geom        Json?
+  
+  // Metadata
+  description String?
+  source      String?
+  sourceId    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  propertyStorms PropertyStorm[]
+
+  @@index([date])
+  @@index([state, date])
+  @@index([type, severity])
+  @@map("storm_events")
+}
+
+enum StormType {
+  HAIL
+  TORNADO
+  WIND
+  HURRICANE
+  FLOOD
+  TSTM
+  OTHER
+}
+
+enum Severity {
+  LIGHT
+  MODERATE
+  SEVERE
+  EXTREME
+}
+
+// Junction table for property-storm relationships
+model PropertyStorm {
+  id           String   @id @default(cuid())
+  propertyId   String
+  stormEventId String
+  distanceMeters Float?
+  affected     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  stormEvent StormEvent @relation(fields: [stormEventId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, stormEventId])
+  @@map("property_storms")
+}
+
+// Lead model
+model Lead {
+  id             String      @id @default(cuid())
+  orgId          String
+  propertyId     String?
+  
+  // Contact info
+  firstName      String?
+  lastName       String?
+  email          String?
+  phone          String?
+  
+  // Lead details
+  status         LeadStatus  @default(NEW)
+  source         String?
+  score          Int         @default(50)
+  priority       Priority    @default(MEDIUM)
+  
+  // Assignment
+  assigneeId     String?
+  assignedAt     DateTime?
+  
+  // Notes
+  notes          String?
+  
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Completed actions
+  contactedAt     DateTime?
+  quotedAt        DateTime?
+  convertedAt     DateTime?
+  lostAt          DateTime?
+  lostReason      String?
+
+  // Relations
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  property     Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  assignee     User?       @relation("Assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([assigneeId])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  NEGOTIATING
+  WON
+  LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}

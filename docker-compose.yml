@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgis/postgis:14-3.3
+    container_name: stormvault-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stormvault
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: stormvault-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API (optional - for development)
+  # api:
+  #   build:
+  #     context: ./apps/backend
+  #     dockerfile: Dockerfile
+  #   container_name: stormvault-api
+  #   restart: unless-stopped
+  #   ports:
+  #     - "4000:4000"
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/stormvault
+  #     REDIS_URL: redis://redis:6379
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./apps/backend:/app
+  #     - /app/node_modules
+  #   command: npm run start:dev
+
+  # Frontend (optional - for development)
+  # frontend:
+  #   build:
+  #     context: ./apps/frontend
+  #     dockerfile: Dockerfile
+  #   container_name: stormvault-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:4000
+  #   depends_on:
+  #     - api
+  #   volumes:
+  #     - ./apps/frontend:/app
+  #     - /app/node_modules
+  #     - /app/.next
+  #   command: npm run dev
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: stormvault-network

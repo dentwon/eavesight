@@ -1,0 +1,45 @@
+{
+  "name": "stormvault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "StormVault - Roofing Intelligence Platform",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "backend:dev": "cd apps/backend && npm run start:dev",
+    "backend:build": "cd apps/backend && npm run build",
+    "backend:start": "cd apps/backend && npm run start:prod",
+    "db:migrate": "cd apps/backend && npx prisma migrate dev",
+    "db:generate": "cd apps/backend && npx prisma generate",
+    "db:push": "cd apps/backend && npx prisma db push",
+    "db:seed": "cd apps/backend && npm run seed",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [
+    "roofing",
+    "saas",
+    "b2b",
+    "lead-generation",
+    "storm-tracking",
+    "property-data"
+  ],
+  "author": "StormVault Team",
+  "license": "UNLICENSED"
+}
