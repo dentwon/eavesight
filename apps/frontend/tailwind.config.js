@@ -6,55 +6,27 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // StormVault Brand Colors
+        // StormVault Dark Theme - Storm Cloud / Charcoal Shingle vibes
+        slate: {
+          850: '#1a2332', // Darker slate for depth
+        },
+        // Primary - Steel Blue (storm cloud accent)
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+          400: '#60a5fa', // Light blue
+          500: '#3b82f6', // Steel blue
+          600: '#2563eb', // Deeper blue
         },
-        secondary: {
-          50: '#faf5ff',
-          100: '#f3e8ff',
-          200: '#e9d5ff',
-          300: '#d8b4fe',
-          400: '#c084fc',
-          500: '#a855f7',
-          600: '#9333ea',
-          700: '#7e22ce',
-          800: '#6b21a8',
-          900: '#581c87',
+        // Accent - Amber/Orange (warmth, contrast, like warning lights)
+        accent: {
+          400: '#fbbf24', // Amber
+          500: '#f59e0b', // Darker amber
+          600: '#d97706', // Even darker
         },
-        storm: {
-          50: '#ecfeff',
-          100: '#cffafe',
-          200: '#a5f3fc',
-          300: '#67e8f9',
-          400: '#22d3ee',
-          500: '#06b6d4',
-          600: '#0891b2',
-          700: '#0e7490',
-          800: '#155e75',
-          900: '#164e63',
-        },
-        neutral: {
-          50: '#fafafa',
-          100: '#f5f5f5',
-          200: '#e5e5e5',
-          300: '#d4d4d4',
-          400: '#a3a3a3',
-          500: '#737373',
-          600: '#525252',
-          700: '#404040',
-          800: '#262626',
-          900: '#171717',
-          950: '#0a0a0a',
+        // Surface colors for dark theme
+        surface: {
+          900: '#0f172a', // Deep navy/slate (main bg)
+          800: '#1e293b', // Slightly lighter (cards)
+          700: '#334155', // Card borders
         },
       },
       fontFamily: {
@@ -62,8 +34,9 @@ module.exports = {
         mono: ['JetBrains Mono', 'monospace'],
       },
       boxShadow: {
-        'glow': '0 0 20px rgba(14, 165, 233, 0.3)',
-        'glow-lg': '0 0 40px rgba(14, 165, 233, 0.4)',
+        'glow': '0 0 20px rgba(59, 130, 246, 0.3)',
+        'glow-accent': '0 0 20px rgba(245, 158, 11, 0.3)',
+        'card': '0 4px 24px rgba(0, 0, 0, 0.4)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

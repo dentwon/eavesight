@@ -4,83 +4,38 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 199 89% 48%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 270 67% 58%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 199 89% 48%;
-    --radius: 0.5rem;
+    --background: 15 23 42; /* slate-900 */
+    --foreground: 248 250 252; /* slate-50 */
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 199 89% 48%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 270 67% 58%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 199 89% 48%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-gray-200;
-  }
   body {
-    @apply bg-white text-gray-900;
+    @apply bg-slate-900 text-slate-50 antialiased;
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - dark theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #1e293b;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #475569;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: #64748b;
 }
 
 /* Map styles */
 .maplibregl-popup-content {
-  @apply rounded-lg shadow-lg p-4;
+  @apply rounded-lg shadow-card p-4;
 }
 
 .maplibregl-popup-close-button {
@@ -103,28 +58,43 @@
   }
 }
 
-/* Button styles */
+/* Button styles - Dark theme */
 .btn-primary {
-  @apply text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:shadow-lg;
-  background-color: #0ea5e9;
+  @apply text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:shadow-glow;
+  background-color: #3b82f6; /* primary-500 */
 }
 .btn-primary:hover {
-  background-color: #0284c7;
+  background-color: #2563eb; /* primary-600 */
 }
 
-.btn-secondary {
-  @apply text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:shadow-lg;
-  background-color: #a855f7;
+.btn-accent {
+  @apply text-slate-900 px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-glow-accent;
+  background-color: #f59e0b; /* accent-500 */
 }
-.btn-secondary:hover {
-  background-color: #9333ea;
+.btn-accent:hover {
+  background-color: #d97706; /* accent-600 */
 }
 
-/* Card styles */
+/* Card styles - Dark theme */
 .card {
-  @apply bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden;
+  @apply bg-slate-800 rounded-xl shadow-card border border-slate-700/50 overflow-hidden;
 }
 
 .card-hover {
-  @apply transition-all duration-200 hover:shadow-xl hover:-translate-y-1;
+  @apply transition-all duration-200 hover:shadow-glow hover:border-slate-600;
+}
+
+/* Gradient text */
+.text-gradient {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(to right, #60a5fa, #f59e0b);
+}
+
+/* Section gradients */
+.bg-gradient-storm {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+}
+
+.bg-gradient-dark {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
 }
