@@ -419,9 +419,7 @@ export default function HomePage() {
 
             {/* Professional Plan */}
             <div className="card p-8 border-primary-500/50 relative">
-              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                <span className="bg-primary-500 text-white text-xs px-3 py-1 rounded-full font-medium">Most Popular</span>
-              </div>
+              <div className="inline-block bg-primary-500 text-white text-xs px-3 py-1 rounded-full font-medium mb-3">Most Popular</div>
               <h3 className="text-lg font-semibold text-white mb-1">Professional</h3>
               <p className="text-slate-500 text-sm mb-4">For growing teams</p>
               <div className="mb-4">
