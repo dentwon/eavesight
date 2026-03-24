@@ -1,11 +1,4 @@
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
-
-// Dynamic import for map background
-const MapBackground = dynamic(() => import('@/components/map/MapView'), {
-  ssr: false,
-  loading: () => <div className="absolute inset-0 bg-slate-900" />
-})
 
 export default function HomePage() {
   return (
@@ -77,18 +70,16 @@ export default function HomePage() {
               <div className="flex-1 text-center text-sm text-slate-500">app.stormvault.com</div>
             </div>
             
-            {/* Real Map */}
-            <div className="relative h-[500px] bg-slate-900">
-              <MapBackground
-                center={[-86.5854, 34.7304]}
-                zoom={10}
-                storms={[
-                  { id: '1', type: 'HAIL', severity: 'SEVERE', date: '2026-03-20', county: 'Madison', city: 'Huntsville', lat: 34.73, lon: -86.58 },
-                  { id: '2', type: 'WIND', severity: 'EXTREME', date: '2026-03-18', county: 'Madison', city: 'Madison', lat: 34.70, lon: -86.72 },
-                  { id: '3', type: 'HAIL', severity: 'MODERATE', date: '2026-03-22', county: 'Morgan', city: 'Decatur', lat: 34.61, lon: -87.00 },
-                  { id: '4', type: 'TORNADO', severity: 'EXTREME', date: '2026-03-19', county: 'Limestone', city: 'Athens', lat: 34.80, lon: -86.97 },
-                  { id: '5', type: 'HAIL', severity: 'LIGHT', date: '2026-03-21', county: 'Madison', city: 'Huntsville', lat: 34.75, lon: -86.55 },
-                ]}
+            {/* Real Map - Embedded OSM */}
+            <div className="relative h-[500px] bg-slate-900 overflow-hidden rounded-b-xl">
+              <iframe 
+                src="https://www.openstreetmap.org/export/embed.html?bbox=-87.0%2C34.2%2C-86.0%2C35.2&amp;layer=mapnik&amp;marker=34.73%2C-86.58" 
+                width="100%" 
+                height="100%" 
+                frameBorder="0" 
+                scrolling="no"
+                title="StormVault Map"
+                className="w-full h-full"
               />
               
               {/* Floating UI overlay */}
@@ -109,6 +100,25 @@ export default function HomePage() {
                     <span className="text-slate-400 text-sm">Huntsville, AL area</span>
                   </div>
                   <span className="text-xs text-slate-400 bg-red-500/20 px-2 py-1 rounded border border-red-500/30">5 Active Storms</span>
+                </div>
+              </div>
+              
+              {/* Custom storm markers overlay */}
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-[35%] left-[55%] w-6 h-6 bg-red-500 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center animate-pulse">
+                  <span className="text-white text-xs font-bold">1</span>
+                </div>
+                <div className="absolute top-[45%] left-[25%] w-6 h-6 bg-red-500 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center animate-pulse">
+                  <span className="text-white text-xs font-bold">2</span>
+                </div>
+                <div className="absolute top-[60%] left-[70%] w-6 h-6 bg-orange-500 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center animate-pulse">
+                  <span className="text-white text-xs font-bold">3</span>
+                </div>
+                <div className="absolute top-[25%] left-[75%] w-6 h-6 bg-red-500 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center animate-pulse">
+                  <span className="text-white text-xs font-bold">4</span>
+                </div>
+                <div className="absolute top-[50%] left-[40%] w-6 h-6 bg-yellow-500 rounded-full border-2 border-white/50 shadow-lg flex items-center justify-center animate-pulse">
+                  <span className="text-white text-xs font-bold">5</span>
                 </div>
               </div>
               
@@ -331,7 +341,7 @@ export default function HomePage() {
 
             {/* Professional Plan */}
             <div className="card p-8 border-primary-500/50 relative">
-              <div className="inline-block bg-primary-500 text-white text-xs px-3 py-1 rounded-full font-medium mb-3">Most Popular</div>
+              <div className="bg-primary-500 text-white text-xs px-3 py-1 rounded-full font-medium inline-block mb-3">Most Popular</div>
               <h3 className="text-lg font-semibold text-white mb-1">Professional</h3>
               <p className="text-slate-500 text-sm mb-4">For growing teams</p>
               <div className="mb-4">
