@@ -1,52 +1,89 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NoaaService } from './noaa.service';
+import { SpcService } from './spc.service';
 
+/**
+ * Storm data sync orchestrator
+ *
+ * Coordinates data collection from multiple free sources:
+ * - SPC: Daily storm reports (hail, wind, tornado) — fresh data, small files
+ * - NOAA: Bulk historical storm database — comprehensive backfill
+ *
+ * Strategy: SPC for daily ingestion, NOAA for historical depth
+ */
 @Injectable()
 export class StormsProcessor {
   private readonly logger = new Logger(StormsProcessor.name);
 
-  constructor(private readonly noaaService: NoaaService) {}
+  constructor(
+    private readonly noaaService: NoaaService,
+    private readonly spcService: SpcService,
+  ) {}
 
   /**
-   * Run every 6 hours to sync latest storm data from NOAA
-   * In production, this should run more frequently during storm season
+   * Every 6 hours: sync today's SPC reports
+   * This catches storms throughout the day
    */
   @Cron(CronExpression.EVERY_6_HOURS)
-  async handleNoaaSync() {
+  async handleSpcSync() {
     if (process.env.ENABLE_STORM_SYNC !== 'true') {
-      this.logger.debug('Storm sync disabled by environment variable');
       return;
     }
 
-    this.logger.log('Starting scheduled NOAA storm data sync...');
-    
+    this.logger.log('Running scheduled SPC sync...');
     try {
-      const result = await this.noaaService.syncStormEvents();
-      this.logger.log(`NOAA storm data sync completed: ${result.synced} events synced`);
+      const result = await this.spcService.syncToday();
+      this.logger.log(`SPC sync: ${result.synced} events synced`);
     } catch (error) {
-      this.logger.error('Failed to sync NOAA storm data', error.stack);
+      this.logger.error('SPC sync failed', error.stack);
     }
   }
 
   /**
-   * Run daily to sync comprehensive storm data
+   * Daily at 3am: comprehensive NOAA sync for historical data
+   * Focuses on Alabama (our launch market) to keep data manageable
    */
-  @Cron(CronExpression.EVERY_DAY_AT_2AM)
-  async handleDailySync() {
+  @Cron(CronExpression.EVERY_DAY_AT_3AM)
+  async handleNoaaSync() {
     if (process.env.ENABLE_STORM_SYNC !== 'true') {
-      this.logger.debug('Storm sync disabled by environment variable');
       return;
     }
 
-    this.logger.log('Starting daily NOAA storm data sync...');
-    
+    this.logger.log('Running daily NOAA historical sync...');
     try {
-      // Fetch more comprehensive data for the past 90 days
-      const result = await this.noaaService.syncStormEvents();
-      this.logger.log(`Daily NOAA storm data sync completed: ${result.synced} events synced`);
+      const result = await this.noaaService.syncStormEvents({
+        state: 'ALABAMA',
+        years: [new Date().getFullYear() - 1],
+        limit: 200,
+      });
+      this.logger.log(`NOAA sync: ${result.synced} events synced`);
     } catch (error) {
-      this.logger.error('Failed to sync daily NOAA storm data', error.stack);
+      this.logger.error('NOAA sync failed', error.stack);
+    }
+  }
+
+  /**
+   * Weekly on Sunday at 4am: broader NOAA backfill
+   * Syncs 2 years of data for Alabama
+   */
+  @Cron('0 4 * * 0')
+  async handleWeeklyBackfill() {
+    if (process.env.ENABLE_STORM_SYNC !== 'true') {
+      return;
+    }
+
+    this.logger.log('Running weekly NOAA backfill...');
+    try {
+      const currentYear = new Date().getFullYear();
+      const result = await this.noaaService.syncStormEvents({
+        state: 'ALABAMA',
+        years: [currentYear - 1, currentYear - 2],
+        limit: 500,
+      });
+      this.logger.log(`Weekly backfill: ${result.synced} events synced`);
+    } catch (error) {
+      this.logger.error('Weekly backfill failed', error.stack);
     }
   }
 }

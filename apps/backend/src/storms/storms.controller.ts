@@ -1,6 +1,8 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StormsService } from './storms.service';
+import { NoaaService } from './noaa.service';
+import { SpcService } from './spc.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetStormsDto } from './dto/get-storms.dto';
 
@@ -9,7 +11,11 @@ import { GetStormsDto } from './dto/get-storms.dto';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class StormsController {
-  constructor(private readonly stormsService: StormsService) {}
+  constructor(
+    private readonly stormsService: StormsService,
+    private readonly noaaService: NoaaService,
+    private readonly spcService: SpcService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get storm events with filters' })
@@ -25,8 +31,45 @@ export class StormsController {
 
   @Get('nearby')
   @ApiOperation({ summary: 'Get storms near a location' })
-  findNearby(@Query() query: { lat: number; lon: number; radius?: number }) {
-    return this.stormsService.findNearby(query.lat, query.lon, query.radius || 50);
+  findNearby(@Query() query: { lat: string; lon: string; radius?: string }) {
+    return this.stormsService.findNearby(
+      parseFloat(query.lat),
+      parseFloat(query.lon),
+      query.radius ? parseFloat(query.radius) : 50,
+    );
+  }
+
+  @Get('zones')
+  @ApiOperation({ summary: 'Get storm zones aggregated by county' })
+  getZones(@Query('state') state: string, @Query('limit') limit?: string) {
+    return this.stormsService.getStormZones(state, limit ? parseInt(limit) : 100);
+  }
+
+  // --- Sync Endpoints (manual triggers) ---
+
+  @Post('sync/spc')
+  @ApiOperation({ summary: 'Manually sync today\'s SPC storm reports' })
+  syncSpc() {
+    return this.spcService.syncToday();
+  }
+
+  @Post('sync/spc/history')
+  @ApiOperation({ summary: 'Sync SPC historical data for a date range' })
+  syncSpcHistory(@Body() body: { startDate: string; endDate: string }) {
+    return this.spcService.syncDateRange(
+      new Date(body.startDate),
+      new Date(body.endDate),
+    );
+  }
+
+  @Post('sync/noaa')
+  @ApiOperation({ summary: 'Manually sync NOAA historical storm data' })
+  syncNoaa(@Body() body?: { state?: string; years?: number[]; limit?: number }) {
+    return this.noaaService.syncStormEvents({
+      state: body?.state,
+      years: body?.years,
+      limit: body?.limit,
+    });
   }
 
   @Get(':id')
