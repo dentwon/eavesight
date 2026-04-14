@@ -22,6 +22,24 @@ export class PropertiesController {
     return this.propertiesService.search(searchDto);
   }
 
+  @Get('in-bounds')
+  @ApiOperation({ summary: 'Get properties in viewport bounds for map' })
+  async propertiesInBounds(
+    @Query('north') north: string,
+    @Query('south') south: string,
+    @Query('east') east: string,
+    @Query('west') west: string,
+    @Query('limit') limit?: string,
+    @Query('zoom') zoom?: string,
+  ) {
+    const n = parseFloat(north), s = parseFloat(south);
+    const e = parseFloat(east), w = parseFloat(west);
+    const lim = Math.min(parseInt(limit || '5000'), 10000);
+    const z = parseInt(zoom || '13');
+    const includeGeometry = z >= 15;
+    return this.propertiesService.findInBounds(n, s, e, w, lim, includeGeometry);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get property by ID' })
   findOne(@Param('id') id: string) {
@@ -37,7 +55,7 @@ export class PropertiesController {
   @Get(':id/roof-age')
   @ApiOperation({ summary: 'Get roof age estimate for property' })
   getRoofAge(@Param('id') id: string) {
-    return this.propertiesService.getRoofAge(id);
+    return this.propertiesService.getRoofData(id);
   }
 
   @Post(':id/enrich')

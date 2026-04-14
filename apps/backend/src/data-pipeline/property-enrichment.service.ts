@@ -33,7 +33,7 @@ export class PropertyEnrichmentService {
   async enrichProperty(propertyId: string): Promise<any> {
     const property = await this.prisma.property.findUnique({
       where: { id: propertyId },
-      include: { enrichment: true },
+      include: { enrichments: true },
     });
 
     if (!property) {
@@ -67,7 +67,7 @@ export class PropertyEnrichmentService {
       }
     } else {
       // If we have coords but no census tract, geocode to get tract info
-      if (!property.enrichment?.censusTract) {
+      if (!property.enrichments?.censusTract) {
         const geocodeResult = await this.censusService.geocodeAddress(
           property.address,
           property.city,
@@ -82,7 +82,7 @@ export class PropertyEnrichmentService {
     }
 
     // Step 2: Fetch Census ACS demographics for the tract
-    const tract = enrichmentData.censusTract || property.enrichment?.censusTract;
+    const tract = enrichmentData.censusTract || property.enrichments?.censusTract;
     if (tract) {
       // Need state and county FIPS codes
       const geocodeResult = await this.censusService.geocodeAddress(
@@ -117,8 +117,8 @@ export class PropertyEnrichmentService {
 
     // Step 4: Estimate roof size and job value
     const roofSqft = this.estimateRoofSqft(property, enrichmentData);
-    enrichmentData.estimatedRoofSqft = roofSqft;
-    enrichmentData.estimatedJobValue = this.estimateJobValue(roofSqft);
+    // Roof data now stored in roof_data table
+    // Job value computed from roof_data
 
     enrichmentData.source = 'census+fema';
 
@@ -150,7 +150,7 @@ export class PropertyEnrichmentService {
   async enrichAllProperties(limit: number = 50): Promise<{ enriched: number; total: number }> {
     const unenriched = await this.prisma.property.findMany({
       where: {
-        enrichment: null,
+        enrichments: null,
       },
       take: limit,
     });
@@ -178,21 +178,15 @@ export class PropertyEnrichmentService {
    * Priority: building footprint > sqft estimate > assessed value proxy
    * Roof sqft is typically 1.1-1.3x the building footprint (depending on pitch)
    */
-  private estimateRoofSqft(property: any, enrichment: any): number | null {
-    // From building footprint (most accurate)
-    if (enrichment.buildingFootprintSqft) {
-      return Math.round(enrichment.buildingFootprintSqft * 1.15); // 15% pitch factor
+  private estimateRoofSqft(property: any, enrichments: any): number | null {
+    // From property sqft (most accessible)
+    if (property.sqft) {
+      return Math.round(property.sqft * 1.15); // 15% pitch factor
     }
 
-    // From property sqft (second best - assume single story for simplicity)
-    if (enrichment.sqft) {
-      return Math.round(enrichment.sqft * 1.15);
-    }
-
-    // From year built + median home value in area (rough proxy)
-    if (enrichment.medianHomeValue) {
-      // Rough: $150/sqft average, so medianHomeValue / 150 = approx sqft
-      const estimatedSqft = enrichment.medianHomeValue / 150;
+    // From median home value as proxy
+    if (enrichments?.medianHomeValue) {
+      const estimatedSqft = enrichments.medianHomeValue / 150;
       return Math.round(estimatedSqft * 1.15);
     }
 

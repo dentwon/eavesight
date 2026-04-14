@@ -4,6 +4,7 @@ import { StormsService } from './storms.service';
 import { NoaaService } from './noaa.service';
 import { SpcService } from './spc.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 import { GetStormsDto } from './dto/get-storms.dto';
 
 @ApiTags('storms')
@@ -70,6 +71,25 @@ export class StormsController {
       years: body?.years,
       limit: body?.limit,
     });
+  }
+
+  @Public()
+  @Get('heatmap')
+  @ApiOperation({ summary: 'Get hail/tornado frequency heat map grid as GeoJSON' })
+  getHeatmap(
+    @Query('north') north: string,
+    @Query('south') south: string,
+    @Query('east') east: string,
+    @Query('west') west: string,
+    @Query('gridSize') gridSize?: string,
+  ) {
+    return this.stormsService.getHailFrequencyGrid(
+      parseFloat(north),
+      parseFloat(south),
+      parseFloat(east),
+      parseFloat(west),
+      gridSize ? parseFloat(gridSize) : 0.05,
+    );
   }
 
   @Get(':id')

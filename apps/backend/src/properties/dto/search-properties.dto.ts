@@ -52,5 +52,30 @@ export class SearchPropertiesDto {
   @IsOptional()
   @Min(1)
   @Transform(({ value }) => parseInt(value))
+  north?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Transform(({ value }) => parseFloat(value))
+  south?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Transform(({ value }) => parseFloat(value))
+  east?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Transform(({ value }) => parseFloat(value))
+  west?: number;
+
+  @ApiPropertyOptional({ example: 50 })
+  @IsNumber()
+  @IsOptional()
+  @Min(1)
+  @Transform(({ value }) => parseInt(value))
   limit?: number;
 }

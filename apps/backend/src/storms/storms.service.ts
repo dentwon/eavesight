@@ -1,26 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { GetStormsDto } from './dto/get-storms.dto';
-import { StormEvent, Prisma } from '@prisma/client';
-
-type StormWithRelations = StormEvent & {
-  propertyStorms?: (Prisma.PropertyStormGetPayload<{ include: { property: true } }> & { property: any })[];
-  _count?: { propertyStorms: number };
-};
 
 @Injectable()
 export class StormsService {
   constructor(private readonly prisma: PrismaService) {}
-
-  // Transform StormEvent to include lat/lon from geom for frontend
-  private transformStorm(storm: StormWithRelations) {
-    const geom = storm.geom as { lat?: number; lon?: number } | null;
-    return {
-      ...storm,
-      lat: geom?.lat ?? null,
-      lon: geom?.lon ?? null,
-    };
-  }
 
   async findAll(query: GetStormsDto) {
     const {
@@ -66,7 +50,7 @@ export class StormsService {
     ]);
 
     return {
-      data: storms.map((s: StormWithRelations) => this.transformStorm(s)),
+      data: storms,
       meta: {
         total,
         limit,
@@ -90,11 +74,10 @@ export class StormsService {
       throw new NotFoundException('Storm event not found');
     }
 
-    return this.transformStorm(storm as StormWithRelations);
+    return storm;
   }
 
   async findActive() {
-    // Active storms: in the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -110,14 +93,17 @@ export class StormsService {
       },
     });
 
-    return storms.map((s: StormWithRelations) => this.transformStorm(s));
+    return storms;
   }
 
   async findNearby(lat: number, lon: number, radiusKm: number = 50) {
-    // Simplified: find storms in same state/county
-    // For production, use PostGIS ST_DWithin
+    // Approximate bounding box filter (1 degree ~ 111km)
+    const degreeRadius = radiusKm / 111;
+
     const storms = await this.prisma.stormEvent.findMany({
       where: {
+        lat: { gte: lat - degreeRadius, lte: lat + degreeRadius },
+        lon: { gte: lon - degreeRadius, lte: lon + degreeRadius },
         date: {
           gte: new Date(new Date().setFullYear(new Date().getFullYear() - 2)),
         },
@@ -126,11 +112,10 @@ export class StormsService {
       take: 50,
     });
 
-    return storms.map((s: StormWithRelations) => this.transformStorm(s));
+    return storms;
   }
 
   async getStormZones(state: string, limit: number = 100) {
-    // Get aggregated storm data by county for map visualization
     const storms = await this.prisma.stormEvent.groupBy({
       by: ['county', 'state', 'type', 'severity'],
       where: { state },
@@ -162,8 +147,10 @@ export class StormsService {
     sourceId?: string;
     lat?: number;
     lon?: number;
+    hailSizeInches?: number;
+    windSpeedMph?: number;
+    tornadoFScale?: string;
   }) {
-    // Check if this storm already exists
     const existing = await this.prisma.stormEvent.findFirst({
       where: {
         sourceId: data.sourceId,
@@ -172,9 +159,7 @@ export class StormsService {
       },
     });
 
-    if (existing) {
-      return this.transformStorm(existing as StormWithRelations);
-    }
+    if (existing) return existing;
 
     const storm = await this.prisma.stormEvent.create({
       data: {
@@ -184,13 +169,83 @@ export class StormsService {
         city: data.city,
         county: data.county,
         state: data.state,
+        lat: data.lat,
+        lon: data.lon,
+        hailSizeInches: data.hailSizeInches,
+        windSpeedMph: data.windSpeedMph,
+        tornadoFScale: data.tornadoFScale,
         description: data.description,
         source: data.source,
         sourceId: data.sourceId,
-        geom: data.lat && data.lon ? { lat: data.lat, lon: data.lon } : undefined,
       },
     });
 
-    return this.transformStorm(storm as StormWithRelations);
+    return storm;
   }
+
+  async getHailFrequencyGrid(
+    north: number,
+    south: number,
+    east: number,
+    west: number,
+    gridSize: number = 0.05,
+  ) {
+    const rows: any[] = await this.prisma.$queryRawUnsafe(
+      `
+      SELECT
+        FLOOR(lat / $1) * $1 AS cell_lat,
+        FLOOR(lon / $1) * $1 AS cell_lon,
+        COUNT(*)::int AS count
+      FROM storm_events
+      WHERE type IN ('HAIL', 'TORNADO')
+        AND lat IS NOT NULL
+        AND lon IS NOT NULL
+        AND lat BETWEEN $2 AND $3
+        AND lon BETWEEN $4 AND $5
+      GROUP BY cell_lat, cell_lon
+      `,
+      gridSize,
+      south,
+      north,
+      west,
+      east,
+    );
+
+    const maxCount = rows.length > 0 ? Math.max(...rows.map((r) => r.count)) : 1;
+
+    const features = rows.map((row) => {
+      const s = Number(row.cell_lat);
+      const w = Number(row.cell_lon);
+      const n = s + gridSize;
+      const e = w + gridSize;
+
+      return {
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [
+            [
+              [w, s],
+              [e, s],
+              [e, n],
+              [w, n],
+              [w, s],
+            ],
+          ],
+        },
+        properties: {
+          count: row.count,
+          normalized: row.count / maxCount,
+          cellLat: s,
+          cellLon: w,
+        },
+      };
+    });
+
+    return {
+      type: 'FeatureCollection' as const,
+      features,
+    };
+  }
+
 }

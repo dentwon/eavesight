@@ -71,8 +71,6 @@ model Organization {
   apiKeys     ApiKey[]
   territories Territory[]
   campaigns   Campaign[]
-  apiUsage    ApiUsage[]
-  apiQuotas   ApiQuota[]
 
   @@map("organizations")
 }
@@ -380,7 +378,6 @@ model Lead {
   id             String      @id @default(cuid())
   orgId          String
   propertyId     String?
-  parcelId       String?  // Madison County PIN for parcel-based leads
 
   firstName      String?
   lastName       String?
@@ -576,12 +573,6 @@ model PropertyEnrichment {
   estimatedJobValue     Int?
   solarRoofData         Json?
 
-  ownerName             String?
-  ownerPhone            String?
-  ownerEmail            String?
-  ownerMailingAddress   String?
-  skipTraceData         Json?
-
   source                String?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -646,109 +637,4 @@ model Territory {
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@map("territories")
-}
-
-model ApiUsage {
-  id          String   @id @default(uuid())
-  orgId       String
-  org         Organization @relation(fields: [orgId], references: [id])
-  service     String
-  endpoint    String
-  credits     Int      @default(1)
-  costCents   Int      @default(0)
-  metadata    Json?
-  propertyId  String?
-  leadId      String?
-  createdAt   DateTime @default(now())
-
-  @@index([orgId, service])
-  @@index([orgId, createdAt])
-  @@index([service, createdAt])
-  @@map("api_usage")
-}
-
-model ApiQuota {
-  id            String   @id @default(uuid())
-  orgId         String
-  org           Organization @relation(fields: [orgId], references: [id])
-  service       String
-  monthlyLimit  Int
-  usedThisMonth Int      @default(0)
-  resetAt       DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([orgId, service])
-  @@map("api_quotas")
-}
-
-// Raw Madison County parcel data from City of Huntsville ArcGIS
-// Source: https://maps.huntsvilleal.gov/server/rest/services/Planning/FindAProperty/MapServer
-model MadisonParcelData {
-  id String @id @default(cuid())
-
-  pin                    String   @unique // Parcel ID (primary key)
-  objectId               Int?     // ArcGIS OBJECTID
-
-  propertyAddress        String?
-  totalBuildingValue     Float?
-  totalAppraisedValue    Float?
-  acres                  Float?
-  zoning                 String?
-  eDistrictName          String?
-  wetland                String?
-  floodZone              String?
-  highSchool             String?
-  hubZone                String?
-  industrialPark         String?
-  localHistoricDistrict  String?
-  nationalHistoricDistrict String?
-  historicBuilding       String?
-  opportunityZone        String?
-  tifDistrict            String?
-  slopeDistrict          String?
-  trafficCount           Int?
-  majorRoad              String?
-
-  // Proximity flags (within 15/30 min drive)
-  bridgeStreet15         String?
-  hospital15             String?
-  marshall15             String?
-  nhip15                 String?
-  toyota15               String?
-  bridgeStreet30         String?
-  hospital30             String?
-  marshall30             String?
-  nhip30                 String?
-  toyota30               String?
-
-  // Owner info (from KCSGIS layer 185)
-  propertyOwner          String?
-  accountOwner           String?
-  mailingAddress         String?
-  mailingAddressFull     String?
-  previousOwners         String?
-  taxDistrict            String?
-  totalLandValue         Float?
-  totalAssessedValue     Float?
-  subdivision           String?
-  neighborhoodName       String?
-  deedType               String?
-  deedBook               String?
-  deedPage               String?
-  deedDate               DateTime?
-
-  // Harvest tracking
-  lastHarvestedAt       DateTime @default(now())
-  lastOwnerEnrichedAt   DateTime?
-
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([pin])
-  @@index([lastHarvestedAt])
-  @@index([propertyAddress])
-  @@index([totalAppraisedValue])
-  @@map("madison_parcel_data")
 }

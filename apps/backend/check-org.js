@@ -5,7 +5,7 @@ async function checkOrg() {
   
   try {
     const user = await prisma.user.findUnique({
-      where: { email: 'demo@stormvault.com' },
+      where: { email: 'demo@eavesight.com' },
       include: { organizationMemberships: { include: { organization: true } } }
     });
     

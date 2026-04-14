@@ -26,7 +26,7 @@ async function bootstrap() {
 
   // Swagger documentation
   const config = new DocumentBuilder()
-    .setTitle('StormVault API')
+    .setTitle('Eavesight API')
     .setDescription('Roofing Intelligence Platform API')
     .setVersion('1.0')
     .addBearerAuth()
@@ -45,7 +45,7 @@ async function bootstrap() {
   const port = process.env.PORT || 4000;
   await app.listen(port);
   
-  console.log(`🚀 StormVault API running on http://localhost:${port}`);
+  console.log(`🚀 Eavesight API running on http://localhost:${port}`);
   console.log(`📚 API Documentation available at http://localhost:${port}/api/docs`);
 }
 

@@ -1,29 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 
-/**
- * Lead Scoring Service
- *
- * Scores leads 0-100 based on how likely they are to convert
- * AND how profitable the job would be for the roofer.
- *
- * Factors (weighted):
- * - Roof age (30%): older roof = more likely needs replacement
- * - Storm severity (20%): worse storm = more likely insurance covers it
- * - Property value (20%): higher value = bigger job ticket
- * - Proximity to storm (15%): closer = more damage likely
- * - Homeownership rate (10%): renters don't hire roofers
- * - Storm recency (5%): more recent = more urgency
- */
 @Injectable()
 export class LeadScoringService {
   private readonly logger = new Logger(LeadScoringService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Score a single lead
-   */
   async scoreLead(leadId: string): Promise<number> {
     const lead = await this.prisma.lead.findUnique({
       where: { id: leadId },
@@ -35,7 +18,8 @@ export class LeadScoringService {
               orderBy: { stormEvent: { date: 'desc' } },
               take: 5,
             },
-            enrichment: true,
+            enrichments: true,
+            roofData: true,
           },
         },
       },
@@ -44,29 +28,16 @@ export class LeadScoringService {
     if (!lead) return 0;
 
     let score = 0;
-
-    // 1. Roof Age Score (30 points max)
     score += this.scoreRoofAge(lead.property);
-
-    // 2. Storm Severity Score (20 points max)
     score += this.scoreStormSeverity(lead.property?.propertyStorms || []);
-
-    // 3. Property Value Score (20 points max)
-    score += this.scorePropertyValue(lead.property?.enrichment);
-
-    // 4. Proximity to Storm (15 points max)
+    score += this.scorePropertyValue(lead.property);
     score += this.scoreProximity(lead.property?.propertyStorms || []);
-
-    // 5. Homeownership Rate (10 points max)
-    score += this.scoreHomeownership(lead.property?.enrichment);
-
-    // 6. Storm Recency (5 points max)
+    score += this.scoreHomeownership(lead.property?.enrichments);
     score += this.scoreRecency(lead.property?.propertyStorms || []);
+    score += await this.scoreStormFrequency(lead.property);
 
-    // Clamp to 0-100
     score = Math.max(0, Math.min(100, Math.round(score)));
 
-    // Update the lead's score
     await this.prisma.lead.update({
       where: { id: leadId },
       data: { score },
@@ -75,9 +46,6 @@ export class LeadScoringService {
     return score;
   }
 
-  /**
-   * Re-score all leads for an organization
-   */
   async scoreAllLeads(orgId: string): Promise<{ scored: number; avgScore: number }> {
     const leads = await this.prisma.lead.findMany({
       where: { orgId, status: { not: 'LOST' } },
@@ -93,7 +61,7 @@ export class LeadScoringService {
         totalScore += score;
         scored++;
       } catch (error) {
-        this.logger.warn(`Failed to score lead ${lead.id}: ${error.message}`);
+        this.logger.warn(`Failed to score lead ${lead.id}: ${error}`);
       }
     }
 
@@ -103,36 +71,32 @@ export class LeadScoringService {
     return { scored, avgScore };
   }
 
-  // --- Scoring Functions ---
-
+  // Max 25 pts (was 30) - roof age is still the strongest signal
   private scoreRoofAge(property: any): number {
-    if (!property) return 5; // default if no property data
+    if (!property) return 5;
 
-    // Get roof age from property data
-    let roofAge: number | null = property.roofAge;
-    if (!roofAge && property.roofYear) {
-      roofAge = new Date().getFullYear() - property.roofYear;
-    }
-    if (!roofAge && property.yearBuilt) {
-      // Assume roof is original if no replacement data
+    let roofAge: number | null = null;
+
+    if (property.roofData?.age) {
+      roofAge = property.roofData.age;
+    } else if (property.yearBuilt) {
       roofAge = new Date().getFullYear() - property.yearBuilt;
     }
 
-    if (!roofAge) return 10; // unknown = moderate score
+    if (!roofAge) return 8;
 
-    // Older roofs score higher (more likely to need replacement)
-    if (roofAge >= 25) return 30;
-    if (roofAge >= 20) return 25;
-    if (roofAge >= 15) return 20;
-    if (roofAge >= 10) return 12;
+    if (roofAge >= 25) return 25;
+    if (roofAge >= 20) return 21;
+    if (roofAge >= 15) return 17;
+    if (roofAge >= 10) return 10;
     if (roofAge >= 5) return 5;
-    return 2; // nearly new roof
+    return 2;
   }
 
+  // Max 20 pts - best severity from recent storms
   private scoreStormSeverity(propertyStorms: any[]): number {
     if (!propertyStorms?.length) return 0;
 
-    // Use the most severe recent storm
     const severities = propertyStorms.map(ps => ps.stormEvent?.severity).filter(Boolean);
     if (severities.length === 0) return 0;
 
@@ -143,18 +107,16 @@ export class LeadScoringService {
       LIGHT: 4,
     };
 
-    const maxSeverity = Math.max(...severities.map((s: string) => severityScores[s] || 0));
-    return maxSeverity;
+    return Math.max(...severities.map((s: string) => severityScores[s] || 0));
   }
 
-  private scorePropertyValue(enrichment: any): number {
-    if (!enrichment) return 10; // default moderate
+  // Max 20 pts - higher value properties = bigger jobs
+  private scorePropertyValue(property: any): number {
+    if (!property) return 10;
 
-    // Use median home value in the area as proxy
-    const homeValue = enrichment.medianHomeValue || enrichment.assessedValue;
+    const homeValue = property.assessedValue || property.marketValue || property.enrichments?.medianHomeValue;
     if (!homeValue) return 10;
 
-    // Higher value = bigger job = more score
     if (homeValue >= 400000) return 20;
     if (homeValue >= 300000) return 17;
     if (homeValue >= 200000) return 14;
@@ -163,34 +125,31 @@ export class LeadScoringService {
     return 5;
   }
 
+  // Max 10 pts (was 15) - how close to storm epicenter
   private scoreProximity(propertyStorms: any[]): number {
     if (!propertyStorms?.length) return 0;
 
-    // Use closest storm distance
     const distances = propertyStorms
       .map(ps => ps.distanceMeters)
       .filter((d: any) => d !== null && d !== undefined);
 
-    if (distances.length === 0) return 8; // has storms linked but no distance data
+    if (distances.length === 0) return 5;
 
     const minDistance = Math.min(...distances);
-
-    // Convert meters to km
     const distKm = minDistance / 1000;
 
-    if (distKm < 1) return 15;
-    if (distKm < 5) return 12;
-    if (distKm < 15) return 9;
-    if (distKm < 30) return 6;
-    return 3;
+    if (distKm < 1) return 10;
+    if (distKm < 5) return 8;
+    if (distKm < 15) return 6;
+    if (distKm < 30) return 4;
+    return 2;
   }
 
-  private scoreHomeownership(enrichment: any): number {
-    if (!enrichment?.homeownershipRate) return 5; // default
+  // Max 10 pts - owner-occupied properties are better leads
+  private scoreHomeownership(enrichments: any): number {
+    if (!enrichments?.homeownershipRate) return 5;
 
-    const rate = enrichment.homeownershipRate;
-
-    // Higher homeownership = more potential customers
+    const rate = enrichments.homeownershipRate;
     if (rate >= 0.8) return 10;
     if (rate >= 0.65) return 8;
     if (rate >= 0.5) return 6;
@@ -198,10 +157,10 @@ export class LeadScoringService {
     return 2;
   }
 
+  // Max 5 pts - recent storms are hotter leads
   private scoreRecency(propertyStorms: any[]): number {
     if (!propertyStorms?.length) return 0;
 
-    // Most recent storm date
     const dates = propertyStorms
       .map(ps => ps.stormEvent?.date)
       .filter(Boolean)
@@ -217,5 +176,44 @@ export class LeadScoringService {
     if (daysSince <= 90) return 3;
     if (daysSince <= 180) return 2;
     return 1;
+  }
+
+  // Max 10 pts (NEW) - historical storm frequency within 10km
+  // Uses full 76-year NOAA dataset to identify hail corridors
+  // Properties in high-frequency zones have taken more cumulative damage
+  private async scoreStormFrequency(property: any): Promise<number> {
+    if (!property?.lat || !property?.lon) return 3;
+
+    try {
+      const result: any[] = await this.prisma.$queryRawUnsafe(`
+        SELECT COUNT(*) as storm_count
+        FROM storm_events
+        WHERE type IN ('HAIL', 'TORNADO')
+          AND lat IS NOT NULL
+          AND lon IS NOT NULL
+          AND (
+            6371 * acos(
+              LEAST(1.0, GREATEST(-1.0,
+                cos(radians($1)) * cos(radians(lat)) * cos(radians(lon) - radians($2))
+                + sin(radians($1)) * sin(radians(lat))
+              ))
+            )
+          ) <= 10
+      `, property.lat, property.lon);
+
+      const count = Number(result[0]?.storm_count || 0);
+
+      // Scoring based on historical storm density within 10km
+      // Calibrated against Alabama data: downtown Huntsville ~320 events, rural ~120
+      if (count >= 300) return 10;
+      if (count >= 200) return 8;
+      if (count >= 150) return 7;
+      if (count >= 100) return 5;
+      if (count >= 50) return 3;
+      return 1;
+    } catch (error) {
+      this.logger.warn(`Storm frequency query failed for property ${property.id}: ${error}`);
+      return 3;
+    }
   }
 }

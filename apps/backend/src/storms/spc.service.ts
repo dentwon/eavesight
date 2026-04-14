@@ -107,6 +107,9 @@ export class SpcService {
           lat,
           lon: lon > 0 ? -lon : lon, // SPC uses positive lon for western hemisphere
           magnitude: mag,
+          hailSizeInches: stormType === 'HAIL' ? mag : undefined,
+          windSpeedMph: stormType === 'WIND' ? mag * 1.15078 : undefined,
+          tornadoFScale: stormType === 'TORNADO' && !isNaN(mag) ? 'EF' + mag : undefined,
         });
       }
 
