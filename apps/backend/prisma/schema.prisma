@@ -742,6 +742,9 @@ model MadisonParcelData {
   lastHarvestedAt       DateTime @default(now())
   lastOwnerEnrichedAt   DateTime?
 
+  // Geocoded coordinates
+  lat                    Float?
+  lon                    Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -750,5 +753,6 @@ model MadisonParcelData {
   @@index([lastHarvestedAt])
   @@index([propertyAddress])
   @@index([totalAppraisedValue])
+  @@index([lat, lon])
   @@map("madison_parcel_data")
 }

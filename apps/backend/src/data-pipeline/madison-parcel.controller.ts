@@ -47,7 +47,7 @@ export class MadisonParcelController {
   @Public()
   @ApiOperation({ summary: 'Create a lead from a parcel PIN' })
   createLead(
-    @Body() body: { pin: string; orgId: string; firstName?: string; lastName?: string; phone?: string; email?: string; notes?: string },
+    @Body() body: { parcelId: string; orgId?: string; firstName?: string; lastName?: string; phone?: string; email?: string; notes?: string; source?: string },
   ) {
     return this.parcelService.createLeadFromParcel(body);
   }
@@ -57,5 +57,28 @@ export class MadisonParcelController {
   @ApiOperation({ summary: 'Get data coverage stats' })
   getStats() {
     return this.parcelService.getStats();
+  }
+
+  @Get('map')
+  @Public()
+  @ApiOperation({ summary: 'Get parcels in bounding box for map rendering' })
+  async getMapParcels(
+    @Query('north') north: string,
+    @Query('south') south: string,
+    @Query('east') east: string,
+    @Query('west') west: string,
+    @Query('limit') limit?: string,
+    @Query('minValue') minValue?: string,
+    @Query('roofAgeMin') roofAgeMin?: string,
+    @Query('roofAgeMax') roofAgeMax?: string,
+  ) {
+    return this.parcelService.getMapParcels({
+      north: parseFloat(north),
+      south: parseFloat(south),
+      east: parseFloat(east),
+      west: parseFloat(west),
+      limit: Math.min(parseInt(limit || '2000'), 5000),
+      minValue: minValue ? parseFloat(minValue) : undefined,
+    });
   }
 }

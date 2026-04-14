@@ -109,24 +109,28 @@ export class MadisonParcelService {
    * Create a lead from a Madison County parcel.
    */
   async createLeadFromParcel(dto: {
-    pin: string;
-    orgId: string;
+    parcelId?: string;
+    pin?: string;
+    orgId?: string;
     firstName?: string;
     lastName?: string;
     phone?: string;
     email?: string;
     notes?: string;
+    address?: string;
+    source?: string;
   }) {
+    const parcelId = dto.parcelId || dto.pin;
     const parcel = await this.prisma.madisonParcelData.findUnique({
-      where: { pin: dto.pin },
+      where: { pin: parcelId },
     });
 
     if (!parcel) {
-      throw new NotFoundException(`Parcel ${dto.pin} not found`);
+      throw new NotFoundException(`Parcel ${parcelId} not found`);
     }
 
     const existing = await this.prisma.lead.findFirst({
-      where: { parcelId: dto.pin, orgId: dto.orgId },
+      where: { parcelId: parcelId, orgId: dto.orgId },
     });
 
     if (existing) {
@@ -140,20 +144,20 @@ export class MadisonParcelService {
     const ownerName = parcel.propertyOwner || '';
     const nameParts = this.parseOwnerName(ownerName);
 
-    const lead = await this.prisma.lead.create({
-      data: {
-        orgId: dto.orgId,
-        parcelId: dto.pin,
-        firstName: dto.firstName || nameParts.firstName,
-        lastName: dto.lastName || nameParts.lastName,
-        phone: dto.phone || null,
-        email: dto.email || null,
-        status: 'NEW',
-        source: 'Madison County Parcel',
-        priority: 'MEDIUM',
-        notes: dto.notes || `Parcel: ${parcel.propertyAddress}, Owner: ${parcel.propertyOwner}`,
-      },
-    });
+    const leadData: any = {
+      parcelId: parcelId,
+      firstName: dto.firstName || nameParts.firstName,
+      lastName: dto.lastName || nameParts.lastName,
+      phone: dto.phone || null,
+      email: dto.email || null,
+      status: 'NEW',
+      source: 'Madison County Parcel',
+      priority: 'MEDIUM',
+      notes: dto.notes || `Parcel: ${parcel.propertyAddress}, Owner: ${parcel.propertyOwner}`,
+    };
+    if (dto.orgId) leadData.orgId = dto.orgId;
+
+    const lead = await this.prisma.lead.create({ data: leadData });
 
     const score = this.scoreParcelLead(parcel);
     await this.prisma.lead.update({
@@ -161,7 +165,7 @@ export class MadisonParcelService {
       data: { score },
     });
 
-    this.logger.log(`Created lead ${lead.id} for parcel ${dto.pin} (score: ${score})`);
+    this.logger.log(`Created lead ${lead.id} for parcel ${parcelId} (score: ${score})`);
 
     return {
       lead: { ...lead, score },
@@ -276,6 +280,45 @@ export class MadisonParcelService {
       return { firstName: parts[0], lastName: parts[parts.length - 1] };
     }
     return { firstName: '', lastName: cleaned };
+  }
+
+  async getMapParcels(opts: {
+    north: number; south: number; east: number; west: number;
+    limit?: number; minValue?: number;
+  }) {
+    const { north, south, east, west, limit = 2000, minValue } = opts;
+    const where: any = {
+      lat: { gte: south, lte: north },
+      lon: { gte: west, lte: east },
+    };
+    if (minValue) {
+      where.totalAppraisedValue = { gte: minValue };
+    }
+
+    const parcels = await this.prisma.madisonParcelData.findMany({
+      where,
+      take: limit,
+      select: {
+        pin: true,
+        propertyAddress: true,
+        propertyOwner: true,
+        mailingAddressFull: true,
+        totalAppraisedValue: true,
+        totalBuildingValue: true,
+        acres: true,
+        zoning: true,
+        floodZone: true,
+        lat: true,
+        lon: true,
+      },
+      orderBy: { totalAppraisedValue: 'desc' },
+    });
+
+    return {
+      parcels,
+      count: parcels.length,
+      bounds: { north, south, east, west },
+    };
   }
 
   /**
