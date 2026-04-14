@@ -88,14 +88,21 @@ export class PropertiesService {
     });
 
     if (!property) {
-      property = await this.lookupExternal(lookupDto);
+      // Fall back to MadisonParcelData
+      const parcel = await this.prisma.madisonParcelData.findFirst({
+        where: {
+          propertyAddress: { contains: address.toUpperCase() },
+        },
+      });
+      if (parcel) {
+        return {
+          source: 'madison_parcel_data',
+          ...parcel,
+        };
+      }
     }
 
     return property;
-  }
-
-  private async lookupExternal(lookupDto: LookupPropertyDto) {
-    return null;
   }
 
   async getRoofData(id: string) {
@@ -200,31 +207,51 @@ export class PropertiesService {
   }
 
   async findInBounds(north: number, south: number, east: number, west: number, limit: number = 5000, includeGeometry: boolean = false) {
-    const properties = await this.prisma.property.findMany({
-      where: {
-        lat: { gte: south, lte: north },
-        lon: { gte: west, lte: east },
-      },
+    // Try Property table first (has lat/lon), fall back to MadisonParcelData
+    const propertyCount = await this.prisma.property.count();
+    if (propertyCount > 0) {
+      return this.prisma.property.findMany({
+        where: {
+          lat: { gte: south, lte: north },
+          lon: { gte: west, lte: east },
+        },
+        take: limit,
+        select: {
+          id: true,
+          lat: true,
+          lon: true,
+          address: true,
+          ownerFullName: true,
+          assessedValue: true,
+          yearBuilt: true,
+          buildingFootprint: includeGeometry ? {
+            select: { geometry: true, areaSqft: true },
+          } : {
+            select: { areaSqft: true },
+          },
+          roofData: {
+            select: { totalAreaSqft: true, material: true, condition: true, estimatedTotalCost: true },
+          },
+        },
+      });
+    }
+
+    // Fall back to MadisonParcelData (no lat/lon but has address search)
+    const parcels = await this.prisma.madisonParcelData.findMany({
       take: limit,
-      select: {
-        id: true,
-        lat: true,
-        lon: true,
-        address: true,
-        ownerFullName: true,
-        assessedValue: true,
-        yearBuilt: true,
-        buildingFootprint: includeGeometry ? {
-          select: { geometry: true, areaSqft: true },
-        } : {
-          select: { areaSqft: true },
-        },
-        roofData: {
-          select: { totalAreaSqft: true, material: true, condition: true, estimatedTotalCost: true },
-        },
-      },
+      orderBy: { pin: 'asc' },
     });
-    return properties;
+
+    return parcels.map(p => ({
+      id: p.pin,
+      pin: p.pin,
+      lat: null,
+      lon: null,
+      address: p.propertyAddress,
+      ownerFullName: p.propertyOwner,
+      assessedValue: p.totalAppraisedValue,
+      parcel: p,
+    }));
   }
 
 }

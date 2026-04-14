@@ -13,12 +13,10 @@ export class MadisonParcelController {
   @ApiOperation({ summary: 'Search Madison County parcels by address' })
   search(
     @Query('q') query?: string,
-    @Query('city') city?: string,
     @Query('limit') limit?: string,
   ) {
     return this.parcelService.search({
       query: query || '',
-      city: city || 'HUNTSVILLE',
       limit: Math.min(parseInt(limit || '50'), 200),
     });
   }
@@ -33,8 +31,8 @@ export class MadisonParcelController {
     @Query('west') west: string,
     @Query('limit') limit?: string,
   ) {
-    // Note: Without lat/lon on parcels, we fall back to address search
-    // The Huntsville harvest will eventually populate lat/lon
+    // Note: MadisonParcelData has no lat/lon yet
+    // Huntsville harvest will populate coordinates eventually
     return this.parcelService.searchByCity('HUNTSVILLE', parseInt(limit || '500'));
   }
 
