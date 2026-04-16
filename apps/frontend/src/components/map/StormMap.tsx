@@ -260,6 +260,8 @@ function addBuildingsPMTiles(
 // Viewport scores fetcher (dynamic painting via feature-state)
 // ============================================================
 
+let _fetchRequestId = 0;
+
 async function fetchAndApplyScores(
   map: maplibregl.Map,
   layer: string,
@@ -276,13 +278,14 @@ async function fetchAndApplyScores(
     maxLat: String(b.getNorth()),
     limit: '50000',
   });
+  const thisRequestId = ++_fetchRequestId;
   try {
     const res = await fetch('/api/map/scores?' + params.toString());
     if (!res.ok) return;
     const data = await res.json();
+    // Abandon stale responses
+    if (thisRequestId !== _fetchRequestId) return;
     const scores: Record<string, number> = data.scores || {};
-    // Clear previous feature-state
-    map.removeFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER });
     for (const idStr of Object.keys(scores)) {
       const id = Number(idStr);
       map.setFeatureState(
