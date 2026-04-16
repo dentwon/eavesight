@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import * as pmtiles from 'pmtiles';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { usePreferencesStore } from '@/stores/preferences';
 
 // ============================================================
 // Types
@@ -150,7 +151,7 @@ function addBuildingsPMTiles(map: maplibregl.Map, onBuildingClick?: (building: B
 
   map.addSource('buildings-pmtiles', {
     type: 'vector',
-    url: 'pmtiles:///buildings-v3.pmtiles',
+    url: 'pmtiles:///north_alabama_buildings.pmtiles',
   });
 
   {
@@ -318,9 +319,24 @@ export default function StormMap({
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
-  const [mapMode, setMapMode] = useState<'map' | 'satellite'>('map');
+  const appTheme = usePreferencesStore((s) => s.appTheme);
+  // mapMode is derived from appTheme so the useEffect fires on theme toggle
+  const [mapMode, setMapMode] = useState<'map' | 'satellite'>(
+    appTheme === 'light' ? 'map' : 'map'
+  );
+
+  // Sync mapMode whenever appTheme changes from external source (e.g. store toggle)
+  useEffect(() => {
+    // appTheme drives the style; mapMode only differs if user explicitly picked satellite
+    if (mapMode !== 'satellite') {
+      // theme changed — force the effect by briefly flipping mapMode
+      setMapMode('satellite');
+      setTimeout(() => setMapMode('map'), 0);
+    }
+  }, [appTheme]);
 
   const CARTO_STYLE_URL = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+  const CARTO_LIGHT_STYLE_URL = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
   // Apply dark blue + orange label overrides for CARTO dark-matter
   const applyCartoOverrides = useCallback((m: maplibregl.Map) => {
@@ -410,9 +426,14 @@ export default function StormMap({
     // Register PMTiles protocol before creating the map
     ensurePMTilesProtocol();
 
+    const getInitialStyle = () => {
+      if (appTheme === 'light') return CARTO_LIGHT_STYLE_URL;
+      return CARTO_STYLE_URL;
+    };
+
     const map = new maplibregl.Map({
       container: mapRef.current,
-      style: CARTO_STYLE_URL,
+      style: getInitialStyle(),
       center: center as [number, number],
       zoom,
       attributionControl: false,
@@ -480,6 +501,8 @@ export default function StormMap({
 
     if (mapMode === 'satellite') {
       map.setStyle(buildSatelliteStyle());
+    } else if (appTheme === 'light') {
+      map.setStyle(CARTO_LIGHT_STYLE_URL);
     } else {
       map.setStyle(CARTO_STYLE_URL);
     }
@@ -490,7 +513,7 @@ export default function StormMap({
       map.setBearing(currentBearing);
       map.setPitch(currentPitch);
 
-      if (mapMode === 'map') {
+      if (appTheme !== 'light') {
         applyCartoOverrides(map);
         addBuildingExtrusions(map);
       }
@@ -498,11 +521,12 @@ export default function StormMap({
       // Re-add PMTiles building source + layer after style change
       addBuildingsPMTiles(map, onBuildingClick);
 
+
       // Re-trigger data layer additions with a small delay for stability
       setMapLoaded(false);
       setTimeout(() => setMapLoaded(true), 50);
     });
-  }, [mapMode]);
+  }, [mapMode, appTheme]);
 
 
   // Hail frequency heat map layer - uses full 76-year NOAA dataset
@@ -961,28 +985,30 @@ export default function StormMap({
     <div className={`relative ${className}`}>
       <div ref={mapRef} className="w-full h-full" />
 
-      {/* Satellite / Map toggle */}
+      {/* Satellite / Map / Light toggle */}
       {interactive && (
         <div className="absolute top-3 right-3 z-10 flex items-center bg-slate-800/90 backdrop-blur-sm border border-slate-700/50 rounded-lg overflow-hidden text-xs">
           <button
-            onClick={() => setMapMode('map')}
+            onClick={() => setAppTheme('dark')}
             className={`px-3 py-1.5 font-medium transition-colors ${
-              mapMode === 'map'
+              appTheme === 'dark'
                 ? 'bg-slate-600/80 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
+            title="Dark mode"
           >
-            Map
+            Dark
           </button>
           <button
-            onClick={() => setMapMode('satellite')}
+            onClick={() => setAppTheme('light')}
             className={`px-3 py-1.5 font-medium transition-colors ${
-              mapMode === 'satellite'
+              appTheme === 'light'
                 ? 'bg-slate-600/80 text-white'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
+            title="Light mode"
           >
-            Satellite
+            Light
           </button>
         </div>
       )}
