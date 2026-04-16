@@ -145,12 +145,12 @@ export default function AnalyticsPage() {
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Cost Per Lead (StormVault)</span>
+              <span className="text-sm text-gray-600">Cost Per Lead (Eavesight)</span>
               <span className="text-sm font-bold text-green-600">$0</span>
             </div>
             <div className="bg-green-50 rounded-lg p-3 mt-2">
               <p className="text-xs text-green-700">
-                Traditional lead cost: $50-200/lead. StormVault generates leads from free public storm data — your cost per lead is effectively $0.
+                Traditional lead cost: $50-200/lead. Eavesight generates leads from free public storm data — your cost per lead is effectively $0.
               </p>
             </div>
           </div>

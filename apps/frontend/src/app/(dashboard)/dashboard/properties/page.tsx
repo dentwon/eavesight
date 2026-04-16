@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
+import { useAuthStore } from '@/stores/auth';
 
 interface Property {
   id: string;
@@ -12,12 +13,15 @@ interface Property {
   zip: string;
   lat?: number;
   lon?: number;
-  yearBuilt?: number;
+  yearBuilt?: number | null;
   roofAge?: number;
   roofYear?: number;
-  ownerName?: string;
-  ownerPhone?: string;
-  ownerEmail?: string;
+  ownerFullName?: string | null;
+  ownerPhone?: string | null;
+  ownerEmail?: string | null;
+  propertyType?: string;
+  assessedValue?: number | null;
+  marketValue?: number | null;
 }
 
 export default function PropertiesPage() {
@@ -26,30 +30,25 @@ export default function PropertiesPage() {
   const [search, setSearch] = useState('');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
 
-  // Mock properties data for demo
-  const mockProperties: Property[] = [
-    { id: '1', address: '123 Oak Street', city: 'Huntsville', state: 'AL', zip: '35801', lat: 34.7250, lon: -86.5800, yearBuilt: 1985, roofAge: 18, ownerName: 'John Smith', ownerPhone: '256-555-0101' },
-    { id: '2', address: '456 Maple Avenue', city: 'Huntsville', state: 'AL', zip: '35801', lat: 34.7300, lon: -86.5850, yearBuilt: 1992, roofAge: 8, ownerName: 'Sarah Johnson', ownerPhone: '256-555-0102' },
-    { id: '3', address: '789 Pine Road', city: 'Huntsville', state: 'AL', zip: '35802', lat: 34.7350, lon: -86.5900, yearBuilt: 1978, roofAge: 22, ownerName: 'Michael Williams', ownerPhone: '256-555-0103' },
-    { id: '4', address: '321 Cedar Lane', city: 'Madison', state: 'AL', zip: '35758', lat: 34.6993, lon: -86.7281, yearBuilt: 2005, roofAge: 12, ownerName: 'Emily Brown', ownerPhone: '256-555-0104' },
-    { id: '5', address: '654 Elm Court', city: 'Madison', state: 'AL', zip: '35758', lat: 34.7050, lon: -86.7200, yearBuilt: 2010, roofAge: 5, ownerName: 'David Davis', ownerPhone: '256-555-0105' },
-    { id: '6', address: '987 Birch Drive', city: 'Huntsville', state: 'AL', zip: '35803', lat: 34.6500, lon: -86.5500, yearBuilt: 1998, roofAge: 15, ownerName: 'Jennifer Miller', ownerPhone: '256-555-0106' },
-    { id: '7', address: '147 Willow Way', city: 'Huntsville', state: 'AL', zip: '35810', lat: 34.7800, lon: -86.6000, yearBuilt: 1982, roofAge: 25, ownerName: 'Robert Wilson', ownerPhone: '256-555-0107' },
-    { id: '8', address: '258 Spruce Circle', city: 'Hazel Green', state: 'AL', zip: '35750', lat: 34.7431, lon: -86.5689, yearBuilt: 2000, roofAge: 10, ownerName: 'Lisa Taylor', ownerPhone: '256-555-0108' },
-  ];
-
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setProperties(mockProperties);
-      setLoading(false);
-    }, 500);
+    const fetchProperties = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get('/properties', { params: { limit: 100 } });
+        setProperties(res.data?.data || res.data || []);
+      } catch (err) {
+        console.error('Failed to fetch properties', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProperties();
   }, []);
 
   const filteredProperties = properties.filter(p =>
     p.address.toLowerCase().includes(search.toLowerCase()) ||
     p.city.toLowerCase().includes(search.toLowerCase()) ||
-    p.ownerName?.toLowerCase().includes(search.toLowerCase())
+    p.ownerFullName?.toLowerCase().includes(search.toLowerCase())
   );
 
   const getRoofAgeColor = (age: number | undefined) => {
@@ -138,9 +137,9 @@ export default function PropertiesPage() {
                   </div>
                 </div>
 
-                {property.ownerName && (
+                {property.ownerFullName && (
                   <div className="mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-sm text-gray-500">Owner: {property.ownerName}</p>
+                    <p className="text-sm text-gray-500">Owner: {property.ownerFullName}</p>
                     {property.ownerPhone && (
                       <p className="text-sm text-primary">{property.ownerPhone}</p>
                     )}
@@ -194,11 +193,11 @@ export default function PropertiesPage() {
                 </div>
               </div>
 
-              {selectedProperty.ownerName && (
+              {selectedProperty.ownerFullName && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-2">Owner</h3>
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <p className="font-medium">{selectedProperty.ownerName}</p>
+                    <p className="font-medium">{selectedProperty.ownerFullName}</p>
                     {selectedProperty.ownerPhone && (
                       <a href={`tel:${selectedProperty.ownerPhone}`} className="text-sm text-primary hover:underline flex items-center gap-1">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

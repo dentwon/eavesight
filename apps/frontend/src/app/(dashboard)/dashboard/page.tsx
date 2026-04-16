@@ -1,336 +1,486 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
-
-// Dynamic import for map to avoid SSR issues
-const MapView = dynamic(() => import('@/components/map/MapView'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading map...</p>
-      </div>
-    </div>
-  ),
-});
 
 interface Lead {
   id: string;
   firstName?: string;
   lastName?: string;
-  phone?: string;
-  email?: string;
+  phone?: string | null;
+  email?: string | null;
   status: string;
   priority: string;
-  address?: string;
-  city?: string;
-  lat?: number;
-  lon?: number;
+  score: number;
+  source?: string;
+  notes?: string;
+  parcelId?: string;
   createdAt: string;
+  quotedAmount?: number | null;
+  assigneeId?: string | null;
   property?: {
-    address: string;
-    city: string;
+    address?: string;
+    city?: string;
+    state?: string;
     yearBuilt?: number;
+    ownerFullName?: string;
+    assessedValue?: number;
   };
 }
 
-interface Storm {
+interface StormEvent {
   id: string;
   type: string;
   severity: string;
   date: string;
-  county: string;
-  city?: string;
-  lat?: number;
-  lon?: number;
+  lat: number;
+  lon: number;
+  hailSizeInches?: number;
+  windSpeedMph?: number;
+  county?: string;
 }
 
 interface Stats {
-  leads: { total: number; new: number; won: number; conversionRate: number };
-  properties: { total: number };
-  storms: { last30Days: number };
+  leads?: { total?: number; new?: number; won?: number };
+  properties?: { total?: number };
+  storms?: { last7Days?: number; last30Days?: number };
+  pipelineValue?: number;
+}
+
+const STATUS_CONFIG = {
+  NEW: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+  CONTACTED: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
+  QUALIFIED: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+  QUOTED: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30' },
+  NEGOTIATING: { bg: 'bg-pink-500/20', text: 'text-pink-400', border: 'border-pink-500/30' },
+  WON: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  LOST: { bg: 'bg-slate-500/20', text: 'text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400', border: 'border-slate-500/30' },
+};
+
+const SEVERITY_COLOR: Record<string, string> = {
+  EXTREME: 'text-red-400 bg-red-500/20',
+  SEVERE: 'text-orange-400 bg-orange-500/20',
+  MODERATE: 'text-amber-400 bg-amber-500/20',
+  LIGHT: 'text-yellow-400 bg-yellow-500/20',
+};
+
+function ScoreBadge({ score }: { score: number }) {
+  if (score >= 75) return <span className="text-xs font-bold text-emerald-400">{score}</span>;
+  if (score >= 55) return <span className="text-xs font-bold text-cyan-400">{score}</span>;
+  if (score >= 35) return <span className="text-xs font-bold text-amber-400">{score}</span>;
+  return <span className="text-xs font-bold text-slate-700 dark:text-slate-600 dark:text-slate-500">{score}</span>;
+}
+
+function formatCurrency(v: number) {
+  if (!v) return '—';
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v}`;
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function formatDate() {
+  return new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [storms, setStorms] = useState<Storm[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [storms, setStorms] = useState<StormEvent[]>([]);
+  const [stats, setStats] = useState<Stats>({});
   const [loading, setLoading] = useState(true);
-  const [showLeadPanel, setShowLeadPanel] = useState(false);
+  const [stormRange, setStormRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.orgId) return;
+  const fetchData = useCallback(async () => {
+    if (!user?.orgId) return;
+    try {
+      const daysMap = { '7d': 7, '30d': 30, '90d': 90, all: 9999 };
+      const days = daysMap[stormRange];
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-      try {
-        const [leadsRes, stormsRes, statsRes] = await Promise.all([
-          api.get('/leads', { params: { limit: 20 } }),
-          api.get('/storms', { params: { state: 'AL', limit: 50 } }),
-          api.get('/analytics/overview'),
-        ]);
+      const [leadsRes, stormsRes, statsRes] = await Promise.all([
+        api.get('/leads', { params: { limit: 100 } }).catch(() => ({ data: [] })),
+        api.get('/storms', { params: { since, limit: 50 } }).catch(() => ({ data: [] })),
+        api.get('/analytics/overview').catch(() => ({ data: {} })),
+      ]);
 
-        setLeads(leadsRes.data.data || []);
-        setStorms(stormsRes.data.data || []);
-        setStats(statsRes.data);
-      } catch (err) {
-        console.error('Failed to fetch dashboard data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [user?.orgId]);
-
-  const handleLeadClick = (lead: Lead) => {
-    setSelectedLead(lead);
-    setShowLeadPanel(true);
-  };
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'NEW': return 'bg-blue-100 text-blue-800';
-      case 'CONTACTED': return 'bg-purple-100 text-purple-800';
-      case 'QUALIFIED': return 'bg-yellow-100 text-yellow-800';
-      case 'QUOTED': return 'bg-cyan-100 text-cyan-800';
-      case 'WON': return 'bg-green-100 text-green-800';
-      case 'LOST': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+      setLeads(Array.isArray(leadsRes.data) ? leadsRes.data : []);
+      setStorms(Array.isArray(stormsRes.data) ? stormsRes.data : []);
+      setStats(statsRes.data || {});
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [user?.orgId, stormRange]);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toUpperCase()) {
-      case 'URGENT': return 'text-red-600';
-      case 'HIGH': return 'text-orange-600';
-      case 'MEDIUM': return 'text-yellow-600';
-      case 'LOW': return 'text-green-600';
-      default: return 'text-gray-600';
-    }
-  };
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Derived data
+  const hotLeads = leads
+    .filter(l => l.status !== 'WON' && l.status !== 'LOST' && l.score >= 55)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
+  const newLeads = leads.filter(l => l.status === 'NEW');
+  const activePipeline = leads.filter(l => !['WON', 'LOST'].includes(l.status));
+  const wonLeads = leads.filter(l => l.status === 'WON');
+  const totalWonValue = wonLeads.reduce((s, l) => s + (l.quotedAmount || 0), 0);
+
+  const recentStorms = storms
+    .filter(s => s.severity === 'EXTREME' || s.severity === 'SEVERE')
+    .slice(0, 5);
+
+  const callableLeads = leads
+    .filter(l => l.phone && !['WON', 'LOST'].includes(l.status))
+    .sort((a, b) => {
+      if (a.priority === 'URGENT' && b.priority !== 'URGENT') return -1;
+      if (b.priority === 'URGENT' && a.priority !== 'URGENT') return 1;
+      return b.score - a.score;
+    })
+    .slice(0, 5);
 
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
-        </div>
+        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-81px)] flex">
-      {/* Main content - Map */}
-      <div className="flex-1 relative min-h-0">
-        <div className="absolute inset-0 pt-0">
-          <MapView
-            leads={leads}
-            storms={storms}
-            center={[-86.5854, 34.7304]} // Huntsville, AL
-            zoom={10}
-            onLeadClick={handleLeadClick}
-          />
-        </div>
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
 
-        {/* Floating stats cards */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000]">
-          <div className="bg-white rounded-lg shadow-lg px-4 py-2 flex items-center gap-6">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-primary">{stats?.leads?.total || 0}</p>
-              <p className="text-xs text-gray-500">Total Leads</p>
-            </div>
-            <div className="w-px h-8 bg-gray-200"></div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">{stats?.leads?.won || 0}</p>
-              <p className="text-xs text-gray-500">Jobs Won</p>
-            </div>
-            <div className="w-px h-8 bg-gray-200"></div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-purple-600">{stats?.storms?.last30Days || 0}</p>
-              <p className="text-xs text-gray-500">Storms (30d)</p>
-            </div>
-            <div className="w-px h-8 bg-gray-200"></div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-cyan-600">{stats?.leads?.conversionRate || 0}%</p>
-              <p className="text-xs text-gray-500">Win Rate</p>
-            </div>
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-slate-700 dark:text-slate-600 dark:text-slate-500">{formatDate()}</p>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mt-0.5">
+              {getGreeting()}{user?.firstName ? `, ${user.firstName}` : ''}
+            </h1>
+            <p className="text-sm text-slate-700 dark:text-slate-600 dark:text-slate-500 mt-1">
+              {activePipeline.length} active leads &bull;
+              {newLeads.length > 0 && <span className="text-blue-400"> {newLeads.length} new</span>}
+              {wonLeads.length > 0 && <span className="text-emerald-400"> &bull; {wonLeads.length} won</span>}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/prospects"
+              className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-900 dark:text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              Find Prospects
+            </Link>
           </div>
         </div>
 
-        {/* Quick add lead button */}
-        <div className="absolute bottom-4 right-[340px] z-[1000]">
-          <button className="bg-primary hover:bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Lead
-          </button>
-        </div>
-      </div>
-
-      {/* Right sidebar - Recent leads */}
-      <div className="w-80 bg-white border-l border-gray-200 flex flex-col z-[1000]">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="font-semibold text-gray-900">Recent Leads</h2>
-          <p className="text-sm text-gray-500">{leads.length} leads in your area</p>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto">
-          {leads.length === 0 ? (
-            <div className="p-4 text-center text-gray-500">
-              <p className="mb-2">No leads yet</p>
-              <p className="text-sm">Click "Add Lead" or search properties on the map</p>
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-600 dark:text-slate-500 uppercase tracking-wider">Active Pipeline</span>
+              <span className="text-lg">📈</span>
             </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {leads.slice(0, 15).map((lead) => (
-                <div
-                  key={lead.id}
-                  onClick={() => handleLeadClick(lead)}
-                  className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">
-                        {lead.firstName || lead.lastName 
-                          ? `${lead.firstName || ''} ${lead.lastName || ''}`.trim()
-                          : 'Unknown'}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {lead.property?.address || lead.address || 'No address'}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Added {formatDate(lead.createdAt)}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${getStatusColor(lead.status)}`}>
-                        {lead.status}
-                      </span>
-                      <span className={`text-xs font-medium ${getPriorityColor(lead.priority)}`}>
-                        {lead.priority}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{activePipeline.length}</p>
+            <p className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 mt-1">
+              {newLeads.length} new &bull; {stats.leads?.won || wonLeads.length} won
+            </p>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-600 dark:text-slate-500 uppercase tracking-wider">Pipeline Value</span>
+              <span className="text-lg">💰</span>
             </div>
-          )}
-        </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{formatCurrency(totalWonValue)}</p>
+            <p className="text-xs text-emerald-400/70 mt-1">Closed won jobs</p>
+          </div>
 
-        <div className="p-3 border-t border-gray-200">
-          <a href="/dashboard/leads" className="block w-full text-center text-sm text-primary hover:text-primary-600 font-medium">
-            View all leads →
-          </a>
-        </div>
-      </div>
-
-      {/* Lead detail panel */}
-      {showLeadPanel && selectedLead && (
-        <div className="fixed inset-0 z-[2000] flex justify-end">
-          <div className="absolute inset-0 bg-black/30" onClick={() => setShowLeadPanel(false)}></div>
-          <div className="relative w-full max-w-md bg-white shadow-xl h-full overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Lead Details</h2>
-              <button
-                onClick={() => setShowLeadPanel(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-600 dark:text-slate-500 uppercase tracking-wider">Storms ({stormRange})</span>
+              <span className="text-lg">🌩️</span>
             </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{storms.length}</p>
+            <p className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 mt-1">
+              {storms.filter(s => s.severity === 'EXTREME' || s.severity === 'SEVERE').length} severe+
+            </p>
+          </div>
 
-            <div className="p-6 space-y-6">
-              {/* Contact info */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Contact Information</h3>
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
-                      <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {selectedLead.firstName || selectedLead.lastName 
-                          ? `${selectedLead.firstName || ''} ${selectedLead.lastName || ''}`.trim()
-                          : 'Unknown'}
-                      </p>
-                      <p className="text-sm text-gray-500">{selectedLead.email || 'No email'}</p>
-                    </div>
-                  </div>
-                  {selectedLead.phone && (
-                    <div className="flex items-center gap-3">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      <a href={`tel:${selectedLead.phone}`} className="text-primary hover:underline">
-                        {selectedLead.phone}
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Property info */}
-              {selectedLead.property && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-3">Property</h3>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <p className="font-medium text-gray-900">{selectedLead.property.address}</p>
-                    <p className="text-sm text-gray-500">{selectedLead.property.city}, AL</p>
-                    {selectedLead.property.yearBuilt && (
-                      <p className="text-sm text-gray-500">Built: {selectedLead.property.yearBuilt}</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Status */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-3">Status</h3>
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedLead.status)}`}>
-                    {selectedLead.status}
-                  </span>
-                  <span className={`text-sm font-medium ${getPriorityColor(selectedLead.priority)}`}>
-                    {selectedLead.priority} Priority
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="space-y-3">
-                <button className="w-full bg-primary hover:bg-primary-600 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                  Update Status
-                </button>
-                <button className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg font-medium transition-colors">
-                  Edit Lead
-                </button>
-              </div>
+          <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-600 dark:text-slate-500 uppercase tracking-wider">Callable Now</span>
+              <span className="text-lg">📞</span>
             </div>
+            <p className="text-2xl font-bold text-cyan-400">{callableLeads.length}</p>
+            <p className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 mt-1">With phone numbers</p>
           </div>
         </div>
-      )}
+
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+          {/* Left: Hot Leads */}
+          <div className="lg:col-span-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">🔥 Top Prospects</h2>
+              <Link href="/dashboard/pipeline" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                View pipeline →
+              </Link>
+            </div>
+
+            {hotLeads.length === 0 ? (
+              <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-xl p-8 text-center">
+                <div className="text-3xl mb-3">🎯</div>
+                <p className="text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400 font-medium mb-1">No scored prospects yet</p>
+                <p className="text-xs text-slate-700 dark:text-slate-600 mb-4">Search properties to find and score leads</p>
+                <Link href="/dashboard/prospects" className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors">
+                  Find prospects →
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {hotLeads.map(lead => {
+                  const cfg = STATUS_CONFIG[lead.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.NEW;
+                  const name = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Unknown';
+                  const addr = lead.property?.address || lead.parcelId || 'No address';
+                  return (
+                    <div key={lead.id} className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl p-4 hover:border-slate-300 dark:border-slate-600 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{name}</p>
+                            <ScoreBadge score={lead.score} />
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cfg.bg} ${cfg.text}`}>
+                              {lead.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 truncate">{addr}</p>
+                          {lead.property?.assessedValue && (
+                            <p className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400 mt-1">
+                              Property value: <span className="text-slate-700 dark:text-slate-300">{formatCurrency(lead.property.assessedValue)}</span>
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          {lead.phone ? (
+                            <a
+                              href={`tel:${lead.phone}`}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 text-xs font-semibold rounded-lg transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                              </svg>
+                              Call
+                            </a>
+                          ) : (
+                            <Link
+                              href="/dashboard/prospects"
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-700 text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400 text-xs font-medium rounded-lg transition-colors"
+                            >
+                              Find #
+                            </Link>
+                          )}
+                          <Link
+                            href="/dashboard/pipeline"
+                            className="text-xs text-slate-700 dark:text-slate-600 hover:text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400 transition-colors"
+                          >
+                            View →
+                          </Link>
+                        </div>
+                      </div>
+                      {lead.notes && (
+                        <p className="text-xs text-slate-700 dark:text-slate-600 mt-2 italic line-clamp-1">"{lead.notes}"</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Recent Severe Storms */}
+            {recentStorms.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">⚠️ Recent Severe Weather</h2>
+                  <select
+                    value={stormRange}
+                    onChange={e => setStormRange(e.target.value as any)}
+                    className="text-xs bg-slate-800 border border-slate-700 text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400 rounded px-2 py-1"
+                  >
+                    <option value="7d">7 days</option>
+                    <option value="30d">30 days</option>
+                    <option value="90d">90 days</option>
+                    <option value="all">All time</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  {recentStorms.map(storm => (
+                    <div key={storm.id} className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/50 rounded-lg p-3 flex items-center gap-3">
+                      <div className="text-xl">
+                        {storm.type === 'HAIL' ? '🧊' : storm.type === 'TORNADO' ? '🌪️' : '💨'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${SEVERITY_COLOR[storm.severity] || SEVERITY_COLOR.LIGHT}`}>
+                            {storm.severity}
+                          </span>
+                          <span className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 dark:text-slate-400">{storm.county || 'Madison County'}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                          {storm.hailSizeInches && (
+                            <span className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500">Ice: {storm.hailSizeInches}"</span>
+                          )}
+                          {storm.windSpeedMph && (
+                            <span className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500">Wind: {storm.windSpeedMph} mph</span>
+                          )}
+                          <span className="text-xs text-slate-700 dark:text-slate-600">
+                            {new Date(storm.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+                      <Link
+                        href={`/dashboard/prospects?q=${storm.county || 'Madison County'}`}
+                        className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors shrink-0"
+                      >
+                        Find affected →
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Callable Leads + Quick Actions */}
+          <div className="lg:col-span-2 space-y-4">
+
+            {/* Callable Now */}
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">📞 Ready to Call</h3>
+                <span className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500">{callableLeads.length}</span>
+              </div>
+              <div className="divide-y divide-slate-700/30">
+                {callableLeads.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-700 dark:text-slate-600 italic">
+                    No leads with phone numbers yet
+                  </div>
+                ) : (
+                  callableLeads.map(lead => {
+                    const name = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Unknown';
+                    return (
+                      <div key={lead.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-slate-800 dark:text-slate-200 truncate">{name}</p>
+                            {lead.priority === 'URGENT' && (
+                              <span className="text-xs text-red-400 font-bold shrink-0">⚡</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-slate-700 dark:text-slate-600 dark:text-slate-500 truncate">{lead.phone}</span>
+                            <ScoreBadge score={lead.score} />
+                          </div>
+                        </div>
+                        <a
+                          href={`tel:${lead.phone}`}
+                          className="shrink-0 w-8 h-8 flex items-center justify-center bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 rounded-lg transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                          </svg>
+                        </a>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="px-4 py-2 border-t border-slate-200 dark:border-slate-700/50">
+                <Link href="/dashboard/pipeline" className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">
+                  Full pipeline →
+                </Link>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/50 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700/50">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">⚡ Quick Actions</h3>
+              </div>
+              <div className="p-3 space-y-2">
+                <Link href="/dashboard/prospects" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700/40 transition-colors group">
+                  <span className="text-lg">🔍</span>
+                  <div>
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-medium group-hover:text-slate-900 dark:text-white transition-colors">Find Prospects</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-600">Search Madison County properties</p>
+                  </div>
+                </Link>
+                <Link href="/dashboard/canvassing" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700/40 transition-colors group">
+                  <span className="text-lg">🗺️</span>
+                  <div>
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-medium group-hover:text-slate-900 dark:text-white transition-colors">Canvassing Mode</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-600">Route through neighborhoods</p>
+                  </div>
+                </Link>
+                <Link href="/dashboard/pipeline" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700/40 transition-colors group">
+                  <span className="text-lg">📊</span>
+                  <div>
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-medium group-hover:text-slate-900 dark:text-white transition-colors">Lead Pipeline</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-600">Manage your sales pipeline</p>
+                  </div>
+                </Link>
+                <Link href="/dashboard/leads" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-700/40 transition-colors group">
+                  <span className="text-lg">📋</span>
+                  <div>
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-medium group-hover:text-slate-900 dark:text-white transition-colors">All Leads</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-600">Table view with filters</p>
+                  </div>
+                </Link>
+              </div>
+            </div>
+
+            {/* New This Week */}
+            {newLeads.length > 0 && (
+              <div className="bg-white dark:bg-slate-800/60 border border-blue-500/20 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700/50 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">New Leads This Session</h3>
+                  <span className="text-xs text-blue-400 ml-auto">{newLeads.length}</span>
+                </div>
+                <div className="divide-y divide-slate-700/30">
+                  {newLeads.slice(0, 5).map(lead => {
+                    const name = [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Unknown';
+                    return (
+                      <div key={lead.id} className="px-4 py-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-slate-800 dark:text-slate-200">{name}</p>
+                            <p className="text-xs text-slate-700 dark:text-slate-600 mt-0.5">{lead.parcelId ? `Parcel ${lead.parcelId}` : lead.source}</p>
+                          </div>
+                          <ScoreBadge score={lead.score} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

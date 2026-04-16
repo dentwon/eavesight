@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
+import { usePreferencesStore } from '@/stores/preferences';
 
 interface UserProfile {
   id: string;
@@ -29,7 +30,9 @@ interface UserProfile {
 export default function SettingsPage() {
   const { user, updateUser, logout } = useAuthStore();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'profile' | 'organization' | 'notifications' | 'billing'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'organization' | 'notifications' | 'billing' | 'preferences'>('profile');
+  const mapTheme = usePreferencesStore((s) => s.mapTheme);
+  const setMapTheme = usePreferencesStore((s) => s.setMapTheme);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -145,6 +148,7 @@ export default function SettingsPage() {
     { key: 'organization', label: 'Organization' },
     { key: 'notifications', label: 'Notifications' },
     { key: 'billing', label: 'Billing' },
+    { key: 'preferences', label: 'Preferences' },
   ] as const;
 
   const org = profile?.organizationMemberships?.[0];
@@ -365,6 +369,38 @@ export default function SettingsPage() {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Preferences Tab */}
+      {activeTab === 'preferences' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Map Preferences</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Default Map Theme</label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { key: 'dark', label: 'Dark', desc: 'Dark basemap with colored labels' },
+                  { key: 'light', label: 'Light', desc: 'Light basemap for daytime use' },
+                  { key: 'satellite', label: 'Satellite', desc: 'Aerial imagery from ESRI' },
+                ].map((theme) => (
+                  <button
+                    key={theme.key}
+                    onClick={() => setMapTheme(theme.key as any)}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      mapTheme === theme.key
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <p className="font-medium text-gray-900">{theme.label}</p>
+                    <p className="text-xs text-gray-500 mt-1">{theme.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
