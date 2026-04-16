@@ -75,10 +75,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile top header */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/50 z-20">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-            </svg>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center">
+            <img src="/logo.svg" alt="Eavesight" className="w-full h-full" />
           </div>
           <span className="text-base font-semibold text-slate-900 dark:text-white">Eavesight</span>
         </Link>
@@ -102,10 +100,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       >
         <div className="flex items-center justify-between px-2 py-5 mb-2">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="w-9 h-9 min-w-[36px] bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-              </svg>
+            <div className="w-9 h-9 min-w-[36px] rounded-lg flex items-center justify-center">
+              <img src="/logo.svg" alt="Eavesight" className="w-full h-full" />
             </div>
             {sidebarExpanded && <span className="text-base font-semibold text-slate-900 dark:text-white whitespace-nowrap">Eavesight</span>}
           </Link>

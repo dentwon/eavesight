@@ -58,24 +58,22 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <Link href="/" className="flex items-center justify-center space-x-2 mb-8">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-            </svg>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center">
+            <img src="/logo.svg" alt="Eavesight" className="w-full h-full" />
           </div>
-          <span className="text-2xl font-bold text-gray-900">StormVault</span>
+          <span className="text-2xl font-bold text-white">Eavesight</span>
         </Link>
 
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Start your free trial</h2>
-          <p className="text-sm text-gray-600 mb-6">3 months free, then $49/month</p>
+        <div className="bg-slate-800 border border-slate-700/50 py-8 px-4 shadow-xl sm:rounded-xl sm:px-10">
+          <h2 className="text-2xl font-bold text-white mb-2">Start your free trial</h2>
+          <p className="text-sm text-slate-400 mb-6">3 months free, then $49/month</p>
 
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -83,7 +81,7 @@ export default function SignupPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="firstName" className="block text-sm font-medium text-slate-300">
                   First name
                 </label>
                 <input
@@ -93,12 +91,12 @@ export default function SignupPage() {
                   required
                   value={formData.firstName}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                  className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   placeholder="John"
                 />
               </div>
               <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="lastName" className="block text-sm font-medium text-slate-300">
                   Last name
                 </label>
                 <input
@@ -108,14 +106,14 @@ export default function SignupPage() {
                   required
                   value={formData.lastName}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                  className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   placeholder="Doe"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="organizationName" className="block text-sm font-medium text-slate-300">
                 Company name
               </label>
               <input
@@ -124,13 +122,13 @@ export default function SignupPage() {
                 type="text"
                 value={formData.organizationName}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="Your Roofing Company"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-slate-300">
                 Email address
               </label>
               <input
@@ -140,13 +138,13 @@ export default function SignupPage() {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="you@example.com"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-slate-300">
                 Password
               </label>
               <input
@@ -156,13 +154,13 @@ export default function SignupPage() {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="••••••••"
               />
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300">
                 Confirm password
               </label>
               <input
@@ -172,31 +170,31 @@ export default function SignupPage() {
                 required
                 value={formData.confirmPassword}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="••••••••"
               />
             </div>
 
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-slate-500">
               By signing up, you agree to our{' '}
-              <a href="/terms" className="text-primary hover:underline">Terms of Service</a>
+              <a href="/terms" className="text-blue-400 hover:text-blue-300 hover:underline">Terms of Service</a>
               {' '}and{' '}
-              <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>
+              <a href="/privacy" className="text-blue-400 hover:text-blue-300 hover:underline">Privacy Policy</a>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-blue-500 disabled:opacity-50 transition-colors"
             >
               {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-400">
               Already have an account?{' '}
-              <Link href="/login" className="text-primary hover:text-primary-600 font-medium">
+              <Link href="/login" className="text-blue-400 hover:text-blue-300 font-medium">
                 Sign in
               </Link>
             </p>

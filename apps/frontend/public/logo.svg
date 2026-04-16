@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="browGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0891b2"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="irisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="roofGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0e7490"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Roof / brow (house roof as the upper lid) -->
+  <!-- Left slope -->
+  <polygon points="6,24 26,8 26,16" fill="url(#roofGrad)"/>
+  <!-- Right slope -->
+  <polygon points="58,24 38,8 38,16" fill="url(#roofGrad)"/>
+  <!-- Roof cap -->
+  <polygon points="26,8 32,3 38,8 32,13" fill="#22d3ee" opacity="0.9"/>
+  <!-- Roof eave lines -->
+  <line x1="6" y1="24" x2="26" y2="8" stroke="#67e8f9" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="58" y1="24" x2="38" y2="8" stroke="#67e8f9" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Eye shape (house-shaped upper lid + natural lower lid) -->
+  <path d="M6,32 Q6,24 12,24 L52,24 Q58,24 58,32 Q58,46 32,50 Q6,46 6,32 Z"
+        fill="none" stroke="url(#browGrad)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Iris -->
+  <circle cx="32" cy="35" r="12" fill="url(#irisGrad)"/>
+
+  <!-- Pupil -->
+  <circle cx="32" cy="35" r="6" fill="#0f172a"/>
+
+  <!-- Highlight -->
+  <circle cx="28" cy="31" r="3" fill="white" opacity="0.85"/>
+  <circle cx="35" cy="38" r="1.5" fill="white" opacity="0.4"/>
+
+  <!-- Subtle house base line -->
+  <line x1="14" y1="24" x2="50" y2="24" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+
+  <!-- Eave detail - small house silhouette hints at sides -->
+  <line x1="6" y1="24" x2="8" y2="26" stroke="#67e8f9" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+  <line x1="58" y1="24" x2="56" y2="26" stroke="#67e8f9" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+</svg>
