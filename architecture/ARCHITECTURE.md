@@ -1,4 +1,4 @@
-# StormVault Technical Architecture
+# Eavesight Technical Architecture
 
 **Version 1.0 | March 2026**
 
@@ -6,7 +6,7 @@
 
 ## System Overview
 
-StormVault is a modern, cloud-native B2B SaaS application designed for scalability, reliability, and cost efficiency. The architecture follows a modular approach to allow rapid iteration and easy maintenance.
+Eavesight is a modern, cloud-native B2B SaaS application designed for scalability, reliability, and cost efficiency. The architecture follows a modular approach to allow rapid iteration and easy maintenance.
 
 ---
 
@@ -493,4 +493,4 @@ GET    /api/analytics/conversion  - Conversion metrics
 ---
 
 *Architecture Document*
-*StormVault - March 2026*
+*Eavesight - March 2026*

@@ -141,158 +141,158 @@ function ensurePMTilesProtocol() {
 // Helper: add PMTiles building source + layer
 // ============================================================
 
-function addBuildingsPMTiles(map: maplibregl.Map, onBuildingClick?: (building: BuildingClickData) => void) {
+function addBuildingsPMTiles(
+  map: maplibregl.Map,
+  onBuildingClick?: (building: BuildingClickData) => void,
+) {
+  const SOURCE = 'buildings-pmtiles';
+  const SOURCE_LAYER = 'buildings';
+
   try {
-    // Remove existing to avoid duplicates on style change
-    if (map.getLayer('building-glow')) map.removeLayer('building-glow');
-    if (map.getLayer('building-dots')) map.removeLayer('building-dots');
-    if (map.getSource('buildings-pmtiles')) map.removeSource('buildings-pmtiles');
+    if (map.getLayer('building-fill')) map.removeLayer('building-fill');
+    if (map.getLayer('building-outline')) map.removeLayer('building-outline');
+    if (map.getLayer('building-highlight')) map.removeLayer('building-highlight');
+    if (map.getSource(SOURCE)) map.removeSource(SOURCE);
   } catch (e) {}
 
-  map.addSource('buildings-pmtiles', {
+  map.addSource(SOURCE, {
     type: 'vector',
     url: 'pmtiles:///north_alabama_buildings.pmtiles',
+    // @ts-ignore promoteId is valid maplibre opt
+    promoteId: 'id',
   });
 
-  {
-    // Glow/beacon layer for high-damage properties (visible at all zoom levels)
-    map.addLayer({
-      id: 'building-glow',
-      type: 'circle',
-      source: 'buildings-pmtiles',
-      'source-layer': 'buildings',
-      minzoom: 10,
-      filter: ['>=', ['get', 'hail'], 0.75],
-      paint: {
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          10, ['interpolate', ['linear'], ['get', 'hail'], 0.75, 8, 1.0, 15, 1.5, 25, 2.0, 40],
-          12, ['interpolate', ['linear'], ['get', 'hail'], 0.75, 10, 1.0, 18, 1.5, 30, 2.0, 45],
-          14, ['interpolate', ['linear'], ['get', 'hail'], 0.75, 6, 1.0, 10, 1.5, 16, 2.0, 22],
-          16, ['interpolate', ['linear'], ['get', 'hail'], 0.75, 4, 1.0, 8, 1.5, 12, 2.0, 16],
+  // Neutral polygon fill \u2014 visible at higher zooms, painted from feature-state
+  map.addLayer({
+    id: 'building-fill',
+    type: 'fill',
+    source: SOURCE,
+    'source-layer': SOURCE_LAYER,
+    minzoom: 12,
+    paint: {
+      'fill-color': [
+        'case',
+        ['has', 'score', ['properties']], '#3b82f6',
+        [
+          'interpolate', ['linear'],
+          ['coalesce', ['feature-state', 'score'], -1],
+          -1, 'rgba(148, 163, 184, 0.20)',
+          0, 'rgba(148, 163, 184, 0.25)',
+          40, '#60a5fa',
+          60, '#f59e0b',
+          80, '#f97316',
+          100, '#dc2626',
         ],
-        'circle-color': [
-          'interpolate', ['linear'], ['get', 'hail'],
-          0.75, '#eab308',
-          1.0, '#f59e0b',
-          1.5, '#ea580c',
-          2.0, '#dc2626',
-        ],
-        'circle-opacity': [
-          'interpolate', ['linear'], ['zoom'],
-          10, 0.25,
-          12, 0.2,
-          14, 0.15,
-          16, 0.1,
-        ],
-        'circle-blur': 1,
-      },
-    });
+      ],
+      'fill-opacity': [
+        'case',
+        ['boolean', ['feature-state', 'hover'], false], 0.85,
+        ['>', ['coalesce', ['feature-state', 'score'], -1], -1], 0.75,
+        0.35,
+      ],
+    },
+  });
 
-    map.addLayer({
-      id: 'building-dots',
-      type: 'circle',
-      source: 'buildings-pmtiles',
-      'source-layer': 'buildings',
-      minzoom: 10,
-      paint: {
-        'circle-radius': [
-          'interpolate', ['linear'], ['zoom'],
-          10, ['step', ['get', 'hail'], 0.5, 0.5, 1.5, 1.0, 4, 2.0, 8],
-          12, ['step', ['get', 'hail'], 1, 0.5, 3, 1.0, 6, 2.0, 12],
-          14, ['step', ['get', 'val'], 2, 30, 4, 75, 6, 150, 8, 300, 11],
-          16, ['step', ['get', 'val'], 3, 30, 5, 75, 8, 150, 11, 300, 15],
-        ],
-        'circle-color': [
-          'case',
-          ['>', ['get', 'hail'], 0],
-          ['interpolate', ['linear'], ['get', 'hail'],
-            0.05, '#1a2744',
-            0.20, '#1e3a5f',
-            0.30, '#155e75',
-            0.40, '#0e7490',
-            0.50, '#06b6d4',
-            0.60, '#14b8a6',
-            0.70, '#22c55e',
-            0.80, '#84cc16',
-            0.90, '#eab308',
-            1.00, '#f59e0b',
-            1.25, '#ea580c',
-            1.50, '#dc2626',
-            2.00, '#991b1b',
-          ],
-          ['case',
-            ['==', ['get', 'stype'], 'TORNADO'], '#ef4444',
-            '#1a2035',
-          ],
-        ],
-        'circle-opacity': [
-          '*',
-          ['interpolate', ['linear'], ['zoom'], 10, 0.1, 11, 0.3, 12, 0.5, 13, 0.8, 15, 1.0],
-          ['case',
-            ['all', ['>', ['get', 'hail'], 0], ['==', ['get', 'own'], 1]],
-            ['interpolate', ['linear'], ['get', 'hail'],
-              0.05, 0.4,
-              0.25, 0.55,
-              0.50, 0.7,
-              0.75, 0.85,
-              1.00, 0.95,
-              1.50, 1.0,
-            ],
-            ['>', ['get', 'hail'], 0],
-            ['interpolate', ['linear'], ['get', 'hail'],
-              0.05, 0.25,
-              0.25, 0.35,
-              0.50, 0.5,
-              0.75, 0.65,
-              1.00, 0.8,
-              1.50, 0.9,
-            ],
-            ['==', ['get', 'stype'], 'TORNADO'],
-            0.8,
-            0.06,
-          ],
-        ],
-        'circle-stroke-width': [
-          'interpolate', ['linear'], ['zoom'],
-          14, 0,
-          15, ['case', ['all', ['>=', ['get', 'val'], 100], ['==', ['get', 'own'], 1]], 1.5, 0],
-          16, ['case', ['all', ['>=', ['get', 'val'], 100], ['==', ['get', 'own'], 1]], 2, ['>=', ['get', 'val'], 50], 1, 0],
-        ],
-        'circle-stroke-color': [
-          'case',
-          ['>=', ['get', 'hail'], 1.0], '#fbbf24',
-          ['>=', ['get', 'hail'], 0.5], '#67e8f9',
-          'rgba(255,255,255,0.3)',
-        ],
-      },
-    });
-  }
+  map.addLayer({
+    id: 'building-outline',
+    type: 'line',
+    source: SOURCE,
+    'source-layer': SOURCE_LAYER,
+    minzoom: 13,
+    paint: {
+      'line-color': 'rgba(148, 163, 184, 0.55)',
+      'line-width': [
+        'interpolate', ['linear'], ['zoom'],
+        13, 0.2,
+        15, 0.5,
+        17, 1.0,
+      ],
+    },
+  });
 
-  // Remove old event listeners by removing and re-adding
-  // (MapLibre doesn't have removeEventListener for layer events,
-  // but duplicate handlers are prevented by the remove/re-add pattern above)
+  // Hover highlight
+  let hoveredId: number | string | null = null;
+  const onMove = (e: any) => {
+    const f = e.features && e.features[0];
+    if (hoveredId !== null) {
+      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId }, { hover: false });
+    }
+    if (f) {
+      hoveredId = f.id as any;
+      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId }, { hover: true });
+      map.getCanvas().style.cursor = 'pointer';
+    } else {
+      hoveredId = null;
+      map.getCanvas().style.cursor = '';
+    }
+  };
+  const onLeave = () => {
+    if (hoveredId !== null) {
+      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId }, { hover: false });
+      hoveredId = null;
+    }
+    map.getCanvas().style.cursor = '';
+  };
+  map.on('mousemove', 'building-fill', onMove);
+  map.on('mouseleave', 'building-fill', onLeave);
 
-  // Click handler
-  map.on('click', 'building-dots', (e) => {
+  map.on('click', 'building-fill', (e) => {
     if (!e.features?.[0]) return;
-    const props = e.features[0].properties;
+    const f = e.features[0];
+    const props: any = f.properties || {};
     const coords = e.lngLat;
     if (onBuildingClick) {
       onBuildingClick({
-        id: props.id,
+        id: String((f as any).id ?? props.id ?? ''),
         lat: coords.lat,
         lon: coords.lng,
-        areaSqft: props.area,
-        damageScore: props.dmg,
-        distanceKm: props.dist,
-        stormType: props.stype,
-        stormSeverity: props.ssev,
+        areaSqft: props.area ?? 0,
+        damageScore: 0,
+        distanceKm: 0,
+        stormType: '',
+        stormSeverity: '',
       });
     }
   });
-  map.on('mouseenter', 'building-dots', () => { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave', 'building-dots', () => { map.getCanvas().style.cursor = ''; });
+}
+
+// ============================================================
+// Viewport scores fetcher (dynamic painting via feature-state)
+// ============================================================
+
+async function fetchAndApplyScores(
+  map: maplibregl.Map,
+  layer: string,
+) {
+  const SOURCE = 'buildings-pmtiles';
+  const SOURCE_LAYER = 'buildings';
+  if (!map.getSource(SOURCE)) return;
+  const b = map.getBounds();
+  const params = new URLSearchParams({
+    layer,
+    minLon: String(b.getWest()),
+    minLat: String(b.getSouth()),
+    maxLon: String(b.getEast()),
+    maxLat: String(b.getNorth()),
+    limit: '50000',
+  });
+  try {
+    const res = await fetch('/api/map/scores?' + params.toString());
+    if (!res.ok) return;
+    const data = await res.json();
+    const scores: Record<string, number> = data.scores || {};
+    // Clear previous feature-state
+    map.removeFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER });
+    for (const idStr of Object.keys(scores)) {
+      const id = Number(idStr);
+      map.setFeatureState(
+        { source: SOURCE, sourceLayer: SOURCE_LAYER, id },
+        { score: scores[idStr] },
+      );
+    }
+  } catch (e) {
+    // Non-fatal
+  }
 }
 
 // ============================================================
@@ -319,6 +319,7 @@ export default function StormMap({
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<string>("lead_score");
   const appTheme = usePreferencesStore((s) => s.appTheme);
   // mapMode is derived from appTheme so the useEffect fires on theme toggle
   const [mapMode, setMapMode] = useState<'map' | 'satellite'>(
@@ -527,6 +528,21 @@ export default function StormMap({
       setTimeout(() => setMapLoaded(true), 50);
     });
   }, [mapMode, appTheme]);
+
+
+  // ============================================================
+  // Viewport score painting (dynamic feature-state)
+  // ============================================================
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || !mapLoaded) return;
+    // Initial paint
+    fetchAndApplyScores(map, activeLayer);
+    const handler = () => fetchAndApplyScores(map, activeLayer);
+    map.on('moveend', handler);
+    return () => { map.off('moveend', handler); };
+  }, [mapLoaded, activeLayer]);
+
 
 
   // Hail frequency heat map layer - uses full 76-year NOAA dataset
@@ -984,6 +1000,27 @@ export default function StormMap({
   return (
     <div className={`relative ${className}`}>
       <div ref={mapRef} className="w-full h-full" />
+
+      {/* Layer toggle */}
+      {interactive && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 rounded-lg p-1 text-xs">
+          {[
+            { id: 'lead_score', label: 'Lead Score' },
+            { id: 'storm_recent', label: 'Latest Storm' },
+            { id: 'roof_age', label: 'Roof Age' },
+            { id: 'dormant', label: 'Dormant' },
+            { id: 'pipeline', label: 'Pipeline' },
+          ].map((l) => (
+            <button
+              key={l.id}
+              onClick={() => setActiveLayer(l.id)}
+              className={"px-3 py-1.5 rounded font-medium transition-colors " + (activeLayer === l.id ? 'bg-amber-500/90 text-slate-900' : 'text-slate-300 hover:bg-slate-700/60')}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Satellite / Map / Light toggle */}
       {interactive && (

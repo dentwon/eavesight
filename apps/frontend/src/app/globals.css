@@ -165,3 +165,17 @@
   animation: splash 2s ease-out infinite;
 }
 
+
+/* Mobile-first layout utilities */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@keyframes fadeInSlide {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeInSlide 0.15s ease-out;
+}

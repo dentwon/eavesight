@@ -10,6 +10,7 @@ import { StormsModule } from './storms/storms.module';
 import { LeadsModule } from './leads/leads.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { HealthModule } from './health/health.module';
+import { MapModule } from './map/map.module';
 import { PrismaModule } from './common/prisma.module';
 import { DataPipelineModule } from './data-pipeline/data-pipeline.module';
 
@@ -30,6 +31,7 @@ import { DataPipelineModule } from './data-pipeline/data-pipeline.module';
     LeadsModule,
     AnalyticsModule,
     HealthModule,
+    MapModule,
     DataPipelineModule,
   ],
 })

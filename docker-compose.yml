@@ -3,7 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgis/postgis:14-3.3
-    container_name: stormvault-postgres
+    container_name: eavesight-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -21,7 +21,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: stormvault-redis
+    container_name: eavesight-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -39,7 +39,7 @@ services:
   #   build:
   #     context: ./apps/backend
   #     dockerfile: Dockerfile
-  #   container_name: stormvault-api
+  #   container_name: eavesight-api
   #   restart: unless-stopped
   #   ports:
   #     - "4000:4000"
@@ -61,7 +61,7 @@ services:
   #   build:
   #     context: ./apps/frontend
   #     dockerfile: Dockerfile
-  #   container_name: stormvault-frontend
+  #   container_name: eavesight-frontend
   #   restart: unless-stopped
   #   ports:
   #     - "3000:3000"
@@ -81,4 +81,4 @@ volumes:
 
 networks:
   default:
-    name: stormvault-network
+    name: eavesight-network
