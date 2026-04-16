@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth';
+import { usePreferencesStore } from '@/stores/preferences';
 
 const navItems = [
   { href: '/dashboard', label: 'Home', icon: 'home' },
@@ -39,37 +40,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuthStore();
-  const [sidebarHover, setSidebarHover] = useState(false);
+  const sidebarExpanded = usePreferencesStore((s) => s.sidebarExpanded);
+  const setSidebarExpanded = usePreferencesStore((s) => s.setSidebarExpanded);
+  const appTheme = usePreferencesStore((s) => s.appTheme);
+  const setAppTheme = usePreferencesStore((s) => s.setAppTheme);
 
   useEffect(() => {
     if (!isAuthenticated) router.push('/login');
   }, [isAuthenticated, router]);
 
   const handleLogout = () => { logout(); router.push('/login'); };
+
+  const toggleSidebar = () => setSidebarExpanded(!sidebarExpanded);
+
+  const toggleTheme = () => {
+    const newTheme = appTheme === 'dark' ? 'light' : 'dark';
+    setAppTheme(newTheme);
+    if (newTheme === 'light') {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    }
+  };
+
   if (!isAuthenticated) return null;
 
   const isActive = (href: string) => href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);
+  const sidebarWidth = sidebarExpanded ? '180px' : '64px';
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col md:flex-row overflow-hidden">
+    <div className="h-screen bg-slate-100 dark:bg-slate-900 flex flex-col md:flex-row overflow-hidden">
       {/* Mobile top header */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800/50 z-20">
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/50 z-20">
         <Link href="/dashboard" className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
             </svg>
           </div>
-          <span className="text-base font-semibold text-white">Eavesight</span>
+          <span className="text-base font-semibold text-slate-900 dark:text-white">Eavesight</span>
         </Link>
         <div className="flex items-center gap-3">
-          <button className="relative p-2 text-slate-400 hover:text-white transition-colors">
+          <button className="relative p-2 text-slate-400 hover:text-slate-600 dark:text-slate-400 dark:hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
             </svg>
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-cyan-500 rounded-full" />
           </button>
-          <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-xs font-medium text-slate-300 border border-slate-600/50">
+          <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600/50">
             {user?.firstName?.[0] || 'U'}
           </div>
         </div>
@@ -77,19 +97,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Desktop sidebar */}
       <aside
-        className="hidden md:flex flex-col bg-slate-950 border-r border-slate-800/50 transition-all duration-200 z-20"
-        style={{ width: sidebarHover ? '180px' : '64px' }}
-        onMouseEnter={() => setSidebarHover(true)}
-        onMouseLeave={() => setSidebarHover(false)}
+        className="hidden md:flex flex-col bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800/50 transition-all duration-200 z-20"
+        style={{ width: sidebarWidth }}
       >
-        <Link href="/dashboard" className="flex items-center gap-3 px-4 py-5 mb-2">
-          <div className="w-9 h-9 min-w-[36px] bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+        <div className="flex items-center justify-between px-2 py-5 mb-2">
+          <Link href="/dashboard" className="flex items-center gap-3">
+            <div className="w-9 h-9 min-w-[36px] bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+              </svg>
+            </div>
+            {sidebarExpanded && <span className="text-base font-semibold text-slate-900 dark:text-white whitespace-nowrap">Eavesight</span>}
+          </Link>
+          <button
+            onClick={toggleSidebar}
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all"
+            title={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            <svg className={`w-4 h-4 transition-transform ${sidebarExpanded ? '' : 'rotate-180'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-          </div>
-          {sidebarHover && <span className="text-base font-semibold text-white whitespace-nowrap animate-fadeIn">Eavesight</span>}
-        </Link>
+          </button>
+        </div>
 
         <nav className="flex-1 flex flex-col gap-0.5 px-2">
           {navItems.map((item) => (
@@ -98,12 +127,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               href={item.href}
               className={`flex items-center gap-3 px-2.5 py-2.5 rounded-lg transition-all duration-150 ${
                 isActive(item.href)
-                  ? 'bg-cyan-500/10 text-cyan-400'
-                  : 'text-slate-500 hover:text-slate-200 hover:bg-slate-800/50'
+                  ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+                  : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/50'
               }`}
             >
               <NavIcon name={item.icon} className="w-5 h-5 min-w-[20px]" />
-              {sidebarHover && <span className="text-sm font-medium whitespace-nowrap animate-fadeIn">{item.label}</span>}
+              {sidebarExpanded && <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>}
             </Link>
           ))}
         </nav>
@@ -111,19 +140,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="px-2 pb-4 space-y-1">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-2.5 py-2.5 rounded-lg text-slate-600 hover:text-slate-300 hover:bg-slate-800/50 transition-all"
+            className="flex items-center gap-3 w-full px-2.5 py-2.5 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all"
           >
             <NavIcon name="logout" className="w-5 h-5 min-w-[20px]" />
-            {sidebarHover && <span className="text-sm font-medium whitespace-nowrap animate-fadeIn">Logout</span>}
+            {sidebarExpanded && <span className="text-sm font-medium whitespace-nowrap">Logout</span>}
+          </button>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-3 w-full px-2.5 py-2.5 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all"
+            title={appTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {appTheme === 'dark' ? (
+              <svg className="w-5 h-5 min-w-[20px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 min-w-[20px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+            {sidebarExpanded && <span className="text-sm font-medium whitespace-nowrap">{appTheme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>}
           </button>
           <div className="flex items-center gap-3 px-2.5 py-2">
-            <div className="w-8 h-8 min-w-[32px] bg-slate-700 rounded-full flex items-center justify-center text-xs font-medium text-slate-400 border border-slate-600/50">
+            <div className="w-8 h-8 min-w-[32px] bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600/50">
               {user?.firstName?.[0] || 'U'}
             </div>
-            {sidebarHover && (
-              <div className="animate-fadeIn overflow-hidden">
-                <p className="text-sm font-medium text-slate-300 truncate">{user?.firstName || 'User'}</p>
-                <p className="text-xs text-slate-600 truncate">{user?.email || ''}</p>
+            {sidebarExpanded && (
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{user?.firstName || 'User'}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-600 truncate">{user?.email || ''}</p>
               </div>
             )}
           </div>
@@ -136,14 +181,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-lg border-t border-slate-800/50 z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800/50 z-20" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="flex items-center justify-around px-2 py-1.5">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors min-w-[56px] ${
-                isActive(item.href) ? 'text-cyan-400' : 'text-slate-500'
+                isActive(item.href) ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'
               }`}
             >
               <NavIcon name={item.icon} className="w-5 h-5" />
