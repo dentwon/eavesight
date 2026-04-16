@@ -1,4 +1,4 @@
-# StormVault Implementation Overview
+# Eavesight Implementation Overview
 
 ## 🏗️ Architecture
 
@@ -84,7 +84,7 @@
 4. **Insurance Partnerships**: Claims assessment services for insurers
 
 ### $100 Deployment Budget
-- **Domain Registration**: $15/year (stormvault.app recommended)
+- **Domain Registration**: $15/year (eavesight.app recommended)
 - **Hosting**: Vercel free tier initially, upgrade as needed
 - **Database**: Supabase free tier or AWS RDS free tier
 - **Analytics**: Mixpanel/Plausible free tier

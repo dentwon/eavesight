@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { MapService, MapLayer } from './map.service';
 
@@ -26,5 +26,11 @@ export class MapController {
     const lim = Math.min(parseInt(limit || '50000'), 200000);
     const scores = await this.mapService.scoresForBbox(layer, bbox, lim);
     return { layer, bbox, scores };
+  }
+
+  @Get('pmtiles/:pmtiles_id/property')
+  @ApiOperation({ summary: 'Get property by PMTiles ID' })
+  async getPropertyByPmtilesId(@Param('pmtiles_id') pmtilesId: string) {
+    return this.mapService.getPropertyByPmtilesId(pmtilesId);
   }
 }

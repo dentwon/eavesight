@@ -1,4 +1,4 @@
-# StormVault Frontend Deployment Guide
+# Eavesight Frontend Deployment Guide
 
 ## Prerequisites
 

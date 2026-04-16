@@ -1,4 +1,4 @@
-# StormVault Visual Implementation Demo
+# Eavesight Visual Implementation Demo
 
 ## 🖥️ Landing Page
 
@@ -6,14 +6,14 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │
 │  ┌───┐                                                                     │
-│  │ ☁ │ StormVault                     Features  Pricing  About  Sign In    │
+│  │ ☁ │ Eavesight                     Features  Pricing  About  Sign In    │
 │  └───┘                                [Get Started]                        │
 │                                                                             │
 │         ⭐ Now in Beta — First 100 users get 3 months free                  │
 │                                                                             │
 │    Find More Roofing Jobs with Storm Intelligence                          │
 │                                                                             │
-│    StormVault combines storm damage data, property insights, and lead       │
+│    Eavesight combines storm damage data, property insights, and lead       │
 │    management into one powerful platform. Stop wasting hours researching    │
 │    leads.                                                                   │
 │                                                                             │

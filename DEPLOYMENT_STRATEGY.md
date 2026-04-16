@@ -1,13 +1,13 @@
-# StormVault $100 Deployment Strategy
+# Eavesight $100 Deployment Strategy
 
 ## 🎯 Objective
-Deploy StormVault with maximum ROI using only the $100 seed money, leveraging free tiers and open-source solutions wherever possible.
+Deploy Eavesight with maximum ROI using only the $100 seed money, leveraging free tiers and open-source solutions wherever possible.
 
 ## 💰 Budget Allocation
 
 | Item | Cost | Notes |
 |------|------|-------|
-| Domain Registration | $15 | stormvault.app (1 year) |
+| Domain Registration | $15 | eavesight.app (1 year) |
 | GitHub Organization | $0 | Free tier sufficient |
 | Initial Marketing | $30 | Social media ads, contractor outreach |
 | Contingency Buffer | $55 | Reserved for unexpected costs |
@@ -18,7 +18,7 @@ Deploy StormVault with maximum ROI using only the $100 seed money, leveraging fr
 **Goal**: Get live with sample data for demonstration
 
 1. **Domain Registration** ($15)
-   - Register `stormvault.app` through Namecheap/Gandi
+   - Register `eavesight.app` through Namecheap/Gandi
    - DNS configuration for both frontend and backend
 
 2. **Self-Hosted Deployment** ($0)
@@ -68,7 +68,7 @@ Maps: OpenStreetMap + MapLibre
 ```
 Internet
     ↓
-stormvault.app (DNS)
+eavesight.app (DNS)
     ↓
 Nginx Reverse Proxy
     ├── /api/* → Backend (port 4000)
@@ -83,8 +83,8 @@ Docker Compose (Single Instance)
 ### Deployment Commands
 ```bash
 # Build and deploy
-git clone https://github.com/yourusername/stormvault.git
-cd stormvault
+git clone https://github.com/yourusername/eavesight.git
+cd eavesight
 
 # Update environment variables
 cp .env.example .env.production
@@ -183,7 +183,7 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## 🚀 Next Steps
 
-1. **Domain Registration** (Today): $15 for stormvault.app
+1. **Domain Registration** (Today): $15 for eavesight.app
 2. **Production Repository Setup** (Today): GitHub with CI/CD
 3. **Deployment Configuration** (Tomorrow): Docker and nginx setup
 4. **Beta Customer Outreach** (This Week): Contact 25 contractors

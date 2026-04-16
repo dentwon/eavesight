@@ -1,12 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
       colors: {
-        // StormVault Dark Theme - Storm Cloud / Charcoal Shingle vibes
+        // Eavesight Dark Theme - Storm Cloud / Charcoal Shingle vibes
         slate: {
           850: '#1a2332', // Darker slate for depth
         },

@@ -20,6 +20,52 @@ export class MapService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Get property by PMTiles ID
+   */
+  async getPropertyByPmtilesId(pmtilesId: string) {
+    const property = await this.prisma.property.findFirst({
+      where: {
+        buildingFootprint: {
+          pmtilesId: parseInt(pmtilesId),
+        },
+      },
+      include: {
+        propertyStorms: {
+          include: { stormEvent: true },
+        },
+        leads: true,
+        roofData: true,
+        buildingFootprint: true,
+        enrichments: true,
+      },
+    });
+
+    return property;
+  }
+
+  /**
+   * Get scores for buildings inside a bounding box, keyed by PMTiles numeric id.
+   * Uses the pmtiles_id column (PopulatePmtilesIds step) or spatial centroid lookup
+   * as fallback to map between PostGIS features and vector tile feature ids.
+   */
+  async scoresForBbox(layer: MapLayer, bbox: Bbox, limit = 50000): Promise<Record<number, number>> {
+    // Check if we have pmtiles_id column populated (from PopulatePmtilesIds)
+    const hasPmtilesIds = await this.prisma.$queryRaw<{exists: boolean}[]>`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'building_footprints' AND column_name = 'pmtiles_id'
+      ) as exists
+    `;
+
+    if (hasPmtilesIds[0]?.exists) {
+      return this.scoreFromPmtilesIds(layer, bbox, limit);
+    }
+
+    // Fallback: spatial centroid lookup
+    return this.scoreFromSpatialCentroid(layer, bbox, limit);
+  }
+
+  /**
    * Get scores for buildings inside a bounding box, keyed by PMTiles numeric id.
    * Uses the pmtiles_id column (PopulatePmtilesIds step) or spatial centroid lookup
    * as fallback to map between PostGIS features and vector tile feature ids.

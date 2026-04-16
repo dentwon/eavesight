@@ -1,4 +1,4 @@
-# StormVault Full Implementation Showcase
+# Eavesight Full Implementation Showcase
 
 ## 🎯 Current Status
 
@@ -48,7 +48,7 @@
 3. **Enterprise Licensing** - Custom solutions for large contractors
 
 ### $100 Deployment Budget Allocation
-- **Domain Registration**: $15/year (stormvault.app recommended)
+- **Domain Registration**: $15/year (eavesight.app recommended)
 - **Hosting**: Vercel free tier initially, upgrade as needed ($0-25/month)
 - **Database**: Supabase/AWS RDS free tier ($0-10/month)
 - **Analytics**: Plausible/Mixpanel free tier ($0-20/month)
@@ -109,7 +109,7 @@ NEW → CONTACTED → QUALIFIED → QUOTED → WON/LOST
 ## 🚀 Next Steps for Deployment
 
 ### With $100 Seed Money:
-1. **Domain Registration** ($15) - stormvault.app
+1. **Domain Registration** ($15) - eavesight.app
 2. **Vercel Deployment** ($0-25) - Frontend hosting
 3. **Database Hosting** ($0-10) - Supabase or AWS free tier
 4. **Analytics Setup** ($0-20) - Plausible or Mixpanel free tier
@@ -156,7 +156,7 @@ NEW → CONTACTED → QUALIFIED → QUOTED → WON/LOST
 
 This implementation is **ready for immediate deployment** with your $100 seed money. The only remaining steps are:
 
-1. Register domain name (stormvault.app recommended)
+1. Register domain name (eavesight.app recommended)
 2. Deploy to cloud hosting (Vercel + Supabase)
 3. Begin customer outreach to roofing contractors
 4. Process first paid leads within 2-3 weeks

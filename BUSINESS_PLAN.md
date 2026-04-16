@@ -1,4 +1,4 @@
-# StormVault Business Plan
+# Eavesight Business Plan
 
 **Version 1.0 | March 2026**
 
@@ -12,7 +12,7 @@ U.S. roofing contractors lose thousands of dollars in potential revenue every ye
 
 ### The Solution
 
-StormVault is an integrated B2B SaaS platform that gives roofing contractors a single dashboard to:
+Eavesight is an integrated B2B SaaS platform that gives roofing contractors a single dashboard to:
 1. View historical storm damage zones overlaid on property maps
 2. Identify properties with aging roofs likely to need replacement
 3. Generate and manage leads for targeted outreach
@@ -66,7 +66,7 @@ StormVault is an integrated B2B SaaS platform that gives roofing contractors a s
 
 ### Our Solution
 
-StormVault integrates ALL data sources into ONE platform at a price point 60-80% lower than competitors.
+Eavesight integrates ALL data sources into ONE platform at a price point 60-80% lower than competitors.
 
 ---
 
@@ -113,7 +113,7 @@ StormVault integrates ALL data sources into ONE platform at a price point 60-80%
 
 ### ROI Calculation
 
-| Metric | Before StormVault | After StormVault |
+| Metric | Before Eavesight | After Eavesight |
 |--------|------------------|------------------|
 | Leads researched/week | 20 | 80 |
 | Time per lead | 45 min | 5 min |
@@ -349,17 +349,17 @@ StormVault integrates ALL data sources into ONE platform at a price point 60-80%
 
 ## Conclusion
 
-StormVault represents an unprecedented opportunity to transform how roofing contractors find and convert customers. By integrating fragmented data sources into a single, affordable platform, we can capture significant market share from expensive, partial solutions.
+Eavesight represents an unprecedented opportunity to transform how roofing contractors find and convert customers. By integrating fragmented data sources into a single, affordable platform, we can capture significant market share from expensive, partial solutions.
 
 With $100 initial investment and focused execution, we can:
 1. Build and launch MVP in 8-12 weeks
 2. Acquire first 50 customers in 6 months
 3. Reach $10K MRR within 12 months
-4. Establish StormVault as the industry standard
+4. Establish Eavesight as the industry standard
 
 **The time to act is now.** Storm events create constant demand, competitors are overpriced, and roofers are hungry for better tools.
 
 ---
 
-*Prepared by StormVault Team*
+*Prepared by Eavesight Team*
 *March 2026*

@@ -4,21 +4,21 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding StormVault database...');
+  console.log('🌱 Seeding Eavesight database...');
 
   // Create demo user
   const passwordHash = await bcrypt.hash('demo1234', 12);
   const user = await prisma.user.upsert({
-    where: { email: 'demo@stormvault.com' },
+    where: { email: 'demo@eavesight.com' },
     update: {},
     create: {
-      email: 'demo@stormvault.com',
+      email: 'demo@eavesight.com',
       passwordHash,
       firstName: 'Demo',
       lastName: 'User',
     },
   });
-  console.log('✅ Created demo user: demo@stormvault.com / demo1234');
+  console.log('✅ Created demo user: demo@eavesight.com / demo1234');
 
   // Create organization
   const org = await prisma.organization.upsert({
@@ -198,7 +198,7 @@ async function main() {
 
   console.log('\n🎉 Seed completed!');
   console.log('\nDemo credentials:');
-  console.log('  Email: demo@stormvault.com');
+  console.log('  Email: demo@eavesight.com');
   console.log('  Password: demo1234');
 }
 

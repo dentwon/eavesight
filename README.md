@@ -1,10 +1,10 @@
-# StormVault - Roofing Intelligence Platform
+# Eavesight - Roofing Intelligence Platform
 
-**StormVault** is a B2B SaaS application designed for U.S. roofing professionals to identify high-potential leads using an integrated data intelligence platform.
+**Eavesight** is a B2B SaaS application designed for U.S. roofing professionals to identify high-potential leads using an integrated data intelligence platform.
 
 ## Overview
 
-StormVault combines:
+Eavesight combines:
 - 🗺️ Google Maps-style interface with parcel overlays
 - 🌩️ Real-time and historical weather damage data (hail, wind, storm)
 - 🏠 Property and ownership information
@@ -33,8 +33,8 @@ StormVault combines:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/stormvault.git
-cd stormvault
+git clone https://github.com/your-org/eavesight.git
+cd eavesight
 
 # Install dependencies
 npm install

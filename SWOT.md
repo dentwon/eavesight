@@ -1,4 +1,4 @@
-# StormVault SWOT Analysis
+# Eavesight SWOT Analysis
 
 **March 2026**
 
@@ -34,7 +34,7 @@
    - Cloud-native infrastructure
 
 6. **Brand Positioning**
-   - Clear, memorable name (StormVault)
+   - Clear, memorable name (Eavesight)
    - Strong value proposition messaging
    - Professional, trustworthy image
 
@@ -243,16 +243,16 @@
 
 ## Conclusion
 
-StormVault's strengths (integrated approach, cost advantage, agile development) position us well to capture significant opportunities (market gap, industry partnerships, geographic expansion) despite threats from established competitors and economic uncertainty.
+Eavesight's strengths (integrated approach, cost advantage, agile development) position us well to capture significant opportunities (market gap, industry partnerships, geographic expansion) despite threats from established competitors and economic uncertainty.
 
 The key to success is focusing on:
 1. **Speed**: Ship MVP fast and iterate
 2. **Value**: Emphasize integration and cost savings
 3. **Customer Success**: Ensure early users see real results
 
-By concentrating resources on high-impact activities and maintaining flexibility, StormVault can establish itself as the industry standard for roofing lead generation within 12-18 months.
+By concentrating resources on high-impact activities and maintaining flexibility, Eavesight can establish itself as the industry standard for roofing lead generation within 12-18 months.
 
 ---
 
-*StormVault SWOT Analysis*
+*Eavesight SWOT Analysis*
 *March 2026*

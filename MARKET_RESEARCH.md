@@ -1,4 +1,4 @@
-# StormVault Market Research
+# Eavesight Market Research
 
 **Updated: March 2026**
 
@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-StormVault enters a fragmented market where roofing contractors currently pay $200-$2,000/month for partial solutions. Our research confirms significant demand for an integrated platform at an accessible price point.
+Eavesight enters a fragmented market where roofing contractors currently pay $200-$2,000/month for partial solutions. Our research confirms significant demand for an integrated platform at an accessible price point.
 
 ---
 
@@ -69,7 +69,7 @@ StormVault enters a fragmented market where roofing contractors currently pay $2
 
 ### Competitive Comparison Matrix
 
-| Feature | StormVault | HailTrace | Telefi | AccuLynx |
+| Feature | Eavesight | HailTrace | Telefi | AccuLynx |
 |---------|------------|-----------|--------|----------|
 | Storm Data | ✅ | ✅ | ❌ | ⚠️ |
 | Property Info | ✅ | ❌ | ✅ | ⚠️ |
@@ -200,7 +200,7 @@ StormVault enters a fragmented market where roofing contractors currently pay $2
 | Enterprise | $500-1,000/mo | API, SSO, unlimited | Large companies |
 | Pay-per-lead | $5-15/lead | No subscription | Occasional users |
 
-### StormVault Pricing Strategy
+### Eavesight Pricing Strategy
 
 **Penetration Pricing (Year 1)**
 - Starter: $49/mo (normally $99) - 1 user, 500 lookups, 1 metro
@@ -307,7 +307,7 @@ StormVault enters a fragmented market where roofing contractors currently pay $2
 
 ## Conclusion
 
-StormVault enters a favorable market characterized by:
+Eavesight enters a favorable market characterized by:
 1. High demand for integrated solutions
 2. Dissatisfaction with current options
 3. Willingness to pay for clear value
@@ -327,5 +327,5 @@ StormVault enters a favorable market characterized by:
 
 ---
 
-*Market Research prepared for StormVault*
+*Market Research prepared for Eavesight*
 *March 2026*
