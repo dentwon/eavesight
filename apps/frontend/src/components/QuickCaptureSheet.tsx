@@ -22,9 +22,21 @@ import { cn } from '@/lib/utils';
 interface Props {
   open: boolean;
   onClose: () => void;
+  /**
+   * Pre-fill the sheet — used when launching from a map-pin tap instead
+   * of from the center FAB. If provided, skip the initial geolocation
+   * and seed the form with the picked property. Rep can still override
+   * any field.
+   */
+  initial?: {
+    propertyId?: string;
+    address?: string;
+    lat?: number;
+    lon?: number;
+  };
 }
 
-export function QuickCaptureSheet({ open, onClose }: Props) {
+export function QuickCaptureSheet({ open, onClose, initial }: Props) {
   const router = useRouter();
 
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -61,8 +73,39 @@ export function QuickCaptureSheet({ open, onClose }: Props) {
     }
     if (requestedRef.current) return;
     requestedRef.current = true;
+
+    // Pre-fill path: we already know the property the rep tapped, so
+    // seed the form and skip the GPS lookup. Geolocation still runs
+    // silently so we can store the rep's true coords on the lead for
+    // canvass-distance analytics later.
+    if (initial) {
+      if (initial.address) setAddress(initial.address);
+      if (initial.propertyId) setPropertyId(initial.propertyId);
+      if (typeof initial.lat === 'number' && typeof initial.lon === 'number') {
+        setCoords({ lat: initial.lat, lon: initial.lon });
+        setCoordStatus('ok');
+      }
+      // Fire GPS silently (don't block the form)
+      locateSilent();
+      return;
+    }
+
     locate();
-  }, [open]);
+  }, [open, initial]);
+
+  // Silent geolocation for pre-filled flows — updates coords if it
+  // succeeds but never flips the UI into "locating" state.
+  const locateSilent = () => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        // Only override if we don't already have coords from `initial`
+        setCoords((prev) => prev ?? { lat: pos.coords.latitude, lon: pos.coords.longitude });
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 10_000 },
+    );
+  };
 
   const locate = () => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
