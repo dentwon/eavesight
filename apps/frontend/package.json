@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-deps.js",
     "build": "next build",
+    "postbuild": "node scripts/verify-css.js",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify-css": "node scripts/verify-css.js",
+    "check-deps": "node scripts/check-deps.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.0",
@@ -28,9 +32,9 @@
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0",
-    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.3.0"
   }
 }

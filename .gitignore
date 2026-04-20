@@ -37,3 +37,4 @@ coverage/
 *.tgz
 *.tar.gz
 node_modules
+*.tsbuildinfo
