@@ -162,7 +162,7 @@ export class AlertsService {
         pa.id, pa."propertyId", pa."alertType", pa."alertSource", pa.severity,
         pa."startedAt", pa."expiresAt", pa.metadata,
         p.address, p.city, p.zip, p.lat, p.lon,
-        p."isEarmarked", p."hailExposureIndex"
+        p."isEarmarked", p."hailExposureIndex", p."yearBuilt", p."yearBuiltConfidence", p."roofSizeClass"
       FROM property_alerts pa
       JOIN properties p ON p.id = pa."propertyId"
       WHERE pa.active = true

@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatCard } from '@/components/ui/stat-card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { DataConfidenceBadge } from '@/components/DataConfidenceBadge';
 import { cn } from '@/lib/utils';
 
 type SortKey = 'severity' | 'hail' | 'recent' | 'zip';
@@ -227,6 +228,19 @@ function AlertRow({ alert }: { alert: ActiveAlert }) {
               <p className="text-xs text-muted-foreground mt-1">
                 Hail exposure: <span className="font-medium text-foreground">{alert.hailExposureIndex.toFixed(1)}</span>
               </p>
+            )}
+            {alert.yearBuilt && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <p className="text-xs text-muted-foreground">
+                  Built: <span className="font-medium text-foreground">{alert.yearBuilt}</span>
+                </p>
+                <DataConfidenceBadge confidence={alert.yearBuiltConfidence} />
+                {alert.roofSizeClass && (
+                  <span className="text-[10px] rounded-full border border-[hsl(var(--border))] px-2 py-0.5 text-muted-foreground">
+                    {alert.roofSizeClass}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

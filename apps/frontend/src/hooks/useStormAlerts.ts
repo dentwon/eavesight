@@ -36,6 +36,9 @@ export interface ActiveAlert {
   lon: number | null;
   isEarmarked: boolean;
   hailExposureIndex: number | null;
+  yearBuilt?: number | null;
+  yearBuiltConfidence?: string | null;
+  roofSizeClass?: string | null;
 }
 
 /**

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
+import { DataConfidenceBadge } from '@/components/DataConfidenceBadge';
 
 interface Lead {
   id: string;
@@ -21,6 +22,7 @@ interface Lead {
     city: string;
     state: string;
     yearBuilt?: number;
+    yearBuiltConfidence?: string;
   };
 }
 
@@ -548,7 +550,10 @@ function LeadDetailPanel({ lead, onClose }: { lead: Lead; onClose: () => void })
                 <p className="font-medium text-white">{lead.property.address}</p>
                 <p className="text-sm text-slate-400">{lead.property.city}, {lead.property.state}</p>
                 {lead.property.yearBuilt && (
-                  <p className="text-sm text-slate-500 mt-1">Built: {lead.property.yearBuilt}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-slate-500">Built: {lead.property.yearBuilt}</p>
+                    <DataConfidenceBadge confidence={lead.property.yearBuiltConfidence} />
+                  </div>
                 )}
               </div>
             </div>
