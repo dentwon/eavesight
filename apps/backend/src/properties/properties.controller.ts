@@ -46,6 +46,12 @@ export class PropertiesController {
     return this.propertiesService.findOne(id);
   }
 
+  @Get('nearest')
+  @ApiOperation({ summary: 'Find nearest known property to GPS coords (for mobile quick-capture)' })
+  nearest(@Query('lat') lat: string, @Query('lon') lon: string) {
+    return this.propertiesService.nearest(parseFloat(lat), parseFloat(lon));
+  }
+
   @Post('lookup')
   @ApiOperation({ summary: 'Quick property lookup by address' })
   lookup(@Body() lookupDto: LookupPropertyDto) {

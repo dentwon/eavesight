@@ -68,6 +68,56 @@ export class PropertiesService {
     return property;
   }
 
+
+  async nearest(lat: number, lon: number) {
+    // Small box prefilter (~1km) so we never scan the whole table, then
+    // compute haversine distance in JS for the handful inside the box.
+    const box = 0.015; // ~1.65km at 34N — plenty for a rep standing on a lawn
+    const candidates = await this.prisma.property.findMany({
+      where: {
+        lat: { gte: lat - box, lte: lat + box },
+        lon: { gte: lon - box, lte: lon + box },
+      },
+      select: {
+        id: true,
+        address: true,
+        city: true,
+        state: true,
+        zip: true,
+        lat: true,
+        lon: true,
+        urgencyScore: true,
+        opportunityScore: true,
+        hailExposureIndex: true,
+      },
+      take: 200,
+    });
+    if (candidates.length === 0) return null;
+
+    const R = 6371000;
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    let best: any = null;
+    let bestDist = Infinity;
+    for (const p of candidates) {
+      if (p.lat == null || p.lon == null) continue;
+      const dLat = toRad(p.lat - lat);
+      const dLon = toRad(p.lon - lon);
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(lat)) * Math.cos(toRad(p.lat)) * Math.sin(dLon / 2) ** 2;
+      const d = 2 * R * Math.asin(Math.sqrt(a));
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
+      }
+    }
+    if (!best) return null;
+    // Only return a "match" if within 75m — otherwise the rep is between houses
+    if (bestDist > 75) return { ...best, distanceM: Math.round(bestDist), matched: false };
+    return { ...best, distanceM: Math.round(bestDist), matched: true };
+  }
+
+
   async lookup(lookupDto: LookupPropertyDto) {
     const { address, city, state, zip } = lookupDto;
 
@@ -181,6 +231,7 @@ export class PropertiesService {
         zip: true,
         ownerFullName: true,
         assessedValue: true,
+        marketValue: true,
         yearBuilt: true,
         propertyType: true,
         onDncList: true,
@@ -223,6 +274,7 @@ export class PropertiesService {
           address: true,
           ownerFullName: true,
           assessedValue: true,
+          marketValue: true,
           yearBuilt: true,
           buildingFootprint: includeGeometry ? {
             select: { geometry: true, areaSqft: true },
@@ -249,7 +301,9 @@ export class PropertiesService {
       lon: null,
       address: p.propertyAddress,
       ownerFullName: p.propertyOwner,
-      assessedValue: p.totalAppraisedValue,
+      // totalAppraisedValue is the real market value; totalAssessedValue is 10% of that for tax purposes.
+      assessedValue: p.totalAssessedValue,
+      marketValue: p.totalAppraisedValue,
       parcel: p,
     }));
   }
