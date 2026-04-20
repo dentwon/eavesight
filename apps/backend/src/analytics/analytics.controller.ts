@@ -27,4 +27,40 @@ export class AnalyticsController {
   getStormImpact(@Request() req: any) {
     return this.analyticsService.getStormImpact(req.user.orgId);
   }
+
+  // =================================================================
+  // NEW: Team Operations — Day 1 dashboard
+  // =================================================================
+
+  @Get('team/leaderboard')
+  @ApiOperation({ summary: 'Rep leaderboard with funnel KPIs' })
+  getRepLeaderboard(@Request() req: any, @Query('days') days?: string) {
+    const d = Math.max(1, Math.min(365, Number(days) || 30));
+    return this.analyticsService.getRepLeaderboard(req.user.orgId, d);
+  }
+
+  @Get('pipeline/velocity')
+  @ApiOperation({ summary: 'Pipeline stage velocity + conversion' })
+  getPipelineVelocity(@Request() req: any, @Query('days') days?: string) {
+    const d = Math.max(7, Math.min(365, Number(days) || 90));
+    return this.analyticsService.getPipelineVelocity(req.user.orgId, d);
+  }
+
+  @Get('leads/decay')
+  @ApiOperation({ summary: 'Uncontacted + stuck leads alert feed' })
+  getLeadDecay(@Request() req: any) {
+    return this.analyticsService.getLeadDecay(req.user.orgId);
+  }
+
+  @Get('territory/equity')
+  @ApiOperation({ summary: 'Territory opportunity-per-rep fairness' })
+  getTerritoryEquity(@Request() req: any) {
+    return this.analyticsService.getTerritoryEquity(req.user.orgId);
+  }
+
+  @Get('forecast/revenue')
+  @ApiOperation({ summary: '30/60/90 day pipeline-weighted revenue forecast' })
+  getRevenueForecast(@Request() req: any) {
+    return this.analyticsService.getRevenueForecast(req.user.orgId);
+  }
 }
