@@ -133,6 +133,7 @@ export class CanvassingService {
           estimatedRoofSqft: roofData?.totalAreaSqft || null,
           estimatedJobValue: roofData?.estimatedTotalCost || null,
           assessedValue: property.assessedValue,
+          marketValue: property.marketValue,
 
           medianHomeValue: enrichments?.medianHomeValue || null,
           homeownershipRate: enrichments?.homeownershipRate || null,
@@ -201,6 +202,7 @@ export interface CanvassingItem {
   estimatedRoofSqft: number | null;
   estimatedJobValue: number | null;
   assessedValue: number | null;
+  marketValue: number | null;
   medianHomeValue: number | null;
   homeownershipRate: number | null;
   ownerName: string | null;

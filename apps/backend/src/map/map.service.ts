@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { TtlCache, bboxKey } from '../common/ttl-cache';
 
 export type MapLayer = 'lead_score' | 'roof_age' | 'storm_recent' | 'dormant' | 'pipeline';
 
@@ -18,6 +19,9 @@ interface ScoredBuilding {
 @Injectable()
 export class MapService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Score results are idempotent over short windows. 60s TTL is generous for pans.
+  private readonly scoresCache = new TtlCache<string, Record<number, number>>(128, 60_000);
 
   /**
    * Get property by PMTiles ID
@@ -47,6 +51,10 @@ export class MapService {
    * Get scores for buildings inside a bounding box, keyed by PMTiles numeric id.
    */
   async scoresForBbox(layer: MapLayer, bbox: Bbox, limit = 50000): Promise<Record<number, number>> {
+    const cacheKey = `${layer}|${bboxKey(bbox.maxLat, bbox.minLat, bbox.maxLon, bbox.minLon, 0.01)}|l=${limit}`;
+    const hit = this.scoresCache.get(cacheKey);
+    if (hit) return hit;
+
     const hasPmtilesIds = await this.prisma.$queryRaw<{exists: boolean}[]>`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
@@ -54,10 +62,12 @@ export class MapService {
       ) as exists
     `;
 
-    if (hasPmtilesIds[0]?.exists) {
-      return this.scoreFromPmtilesIds(layer, bbox, limit);
-    }
-    return this.scoreFromSpatialCentroid(layer, bbox, limit);
+    const result = hasPmtilesIds[0]?.exists
+      ? await this.scoreFromPmtilesIds(layer, bbox, limit)
+      : await this.scoreFromSpatialCentroid(layer, bbox, limit);
+
+    this.scoresCache.set(cacheKey, result);
+    return result;
   }
 
   // ── lead_score ──────────────────────────────────────────────────────────────

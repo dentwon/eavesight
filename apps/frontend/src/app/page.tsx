@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Logo } from '@/components/Logo'
 
 export default function HomePage() {
   return (
@@ -8,8 +9,8 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center">
-                <img src="/logo.svg" alt="Eavesight" className="w-full h-full" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white">
+                <Logo className="w-full h-full" />
               </div>
               <span className="text-xl font-bold text-white tracking-tight">Eavesight</span>
             </div>

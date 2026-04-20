@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/auth';
 import { authApi } from '@/lib/auth';
+import { Logo } from '@/components/Logo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,8 +36,8 @@ export default function LoginPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Logo */}
         <Link href="/" className="flex items-center justify-center space-x-2 mb-8">
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center">
-            <img src="/logo.svg" alt="Eavesight" className="w-full h-full" />
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white">
+            <Logo className="w-full h-full" />
           </div>
           <span className="text-2xl font-bold text-white">Eavesight</span>
         </Link>

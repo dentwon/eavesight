@@ -114,7 +114,13 @@ export class LeadScoringService {
   private scorePropertyValue(property: any): number {
     if (!property) return 10;
 
-    const homeValue = property.assessedValue || property.marketValue || property.enrichments?.medianHomeValue;
+    // Prefer marketValue (true appraised dollars). In Alabama residential,
+    // assessedValue is 10% of appraised, so we scale it up to make a
+    // meaningful comparison. Fall back to enrichment medians last.
+    const homeValue =
+      property.marketValue ||
+      (property.assessedValue ? property.assessedValue * 10 : 0) ||
+      property.enrichments?.medianHomeValue;
     if (!homeValue) return 10;
 
     if (homeValue >= 400000) return 20;

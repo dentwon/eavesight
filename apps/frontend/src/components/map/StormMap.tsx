@@ -32,6 +32,7 @@ interface PropertyPoint {
   address: string;
   ownerFullName?: string;
   assessedValue?: number;
+  marketValue?: number;
   yearBuilt?: number;
   roofData?: {
     totalAreaSqft?: number;
@@ -215,11 +216,11 @@ function addBuildingsPMTiles(
   const onMove = (e: any) => {
     const f = e.features && e.features[0];
     if (hoveredId !== null) {
-      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId }, { hover: false });
+      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId ?? undefined }, { hover: false });
     }
     if (f) {
       hoveredId = f.id as any;
-      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId }, { hover: true });
+      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId ?? undefined }, { hover: true });
       map.getCanvas().style.cursor = 'pointer';
     } else {
       hoveredId = null;
@@ -228,7 +229,7 @@ function addBuildingsPMTiles(
   };
   const onLeave = () => {
     if (hoveredId !== null) {
-      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId }, { hover: false });
+      map.setFeatureState({ source: SOURCE, sourceLayer: SOURCE_LAYER, id: hoveredId ?? undefined }, { hover: false });
       hoveredId = null;
     }
     map.getCanvas().style.cursor = '';
@@ -260,11 +261,29 @@ function addBuildingsPMTiles(
 // Viewport scores fetcher (dynamic painting via feature-state)
 // ============================================================
 
-let _fetchRequestId = 0;
+let _scoresAbort: AbortController | null = null;
+
+/**
+ * Debounce with leading+trailing edge: fires after `wait` ms of quiet, and
+ * cancels any pending call on unmount. Returns the debounced fn and a cancel().
+ */
+function makeDebouncer(wait: number) {
+  let t: ReturnType<typeof setTimeout> | null = null;
+  return {
+    call(fn: () => void) {
+      if (t) clearTimeout(t);
+      t = setTimeout(fn, wait);
+    },
+    cancel() {
+      if (t) { clearTimeout(t); t = null; }
+    },
+  };
+}
 
 async function fetchAndApplyScores(
   map: maplibregl.Map,
   layer: string,
+  onLoadingChange?: (delta: number) => void,
 ) {
   const SOURCE = 'buildings-pmtiles';
   const SOURCE_LAYER = 'buildings';
@@ -278,13 +297,16 @@ async function fetchAndApplyScores(
     maxLat: String(b.getNorth()),
     limit: '50000',
   });
-  const thisRequestId = ++_fetchRequestId;
+  // Abort any in-flight scores fetch — we only care about the current viewport
+  if (_scoresAbort) _scoresAbort.abort();
+  _scoresAbort = new AbortController();
+  const signal = _scoresAbort.signal;
+  onLoadingChange?.(1);
   try {
-    const res = await fetch('/api/map/scores?' + params.toString());
+    const res = await fetch('/api/map/scores?' + params.toString(), { signal });
     if (!res.ok) return;
     const data = await res.json();
-    // Abandon stale responses
-    if (thisRequestId !== _fetchRequestId) return;
+    if (signal.aborted) return;
     const scores: Record<string, number> = data.scores || {};
     for (const idStr of Object.keys(scores)) {
       const id = Number(idStr);
@@ -293,8 +315,12 @@ async function fetchAndApplyScores(
         { score: scores[idStr] },
       );
     }
-  } catch (e) {
-    // Non-fatal
+  } catch (e: any) {
+    if (e?.name !== 'AbortError') {
+      // Non-fatal
+    }
+  } finally {
+    onLoadingChange?.(-1);
   }
 }
 
@@ -323,7 +349,13 @@ export default function StormMap({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
   const [activeLayer, setActiveLayer] = useState<string>("lead_score");
+  const [showStormTracks, setShowStormTracks] = useState<boolean>(true);
+  const [showStormDensity, setShowStormDensity] = useState<boolean>(false);
+  const [stormMonths, setStormMonths] = useState<number>(24);
+  // Inflight fetch count drives the top-of-map loading bar
+  const [loadingCount, setLoadingCount] = useState(0);
   const appTheme = usePreferencesStore((s) => s.appTheme);
+  const setAppTheme = usePreferencesStore((s) => s.setAppTheme);
   // mapMode is derived from appTheme so the useEffect fires on theme toggle
   const [mapMode, setMapMode] = useState<'map' | 'satellite'>(
     appTheme === 'light' ? 'map' : 'map'
@@ -539,19 +571,35 @@ export default function StormMap({
   useEffect(() => {
     const map = mapInstance.current;
     if (!map || !mapLoaded) return;
-    // Initial paint
-    fetchAndApplyScores(map, activeLayer);
-    const handler = () => fetchAndApplyScores(map, activeLayer);
+    const bump = (d: number) => setLoadingCount((c) => Math.max(0, c + d));
+    // Initial paint fires immediately (no debounce on first load)
+    fetchAndApplyScores(map, activeLayer, bump);
+    const debouncer = makeDebouncer(300);
+    const handler = () => debouncer.call(() => fetchAndApplyScores(map, activeLayer, bump));
     map.on('moveend', handler);
-    return () => { map.off('moveend', handler); };
+    return () => {
+      map.off('moveend', handler);
+      debouncer.cancel();
+    };
   }, [mapLoaded, activeLayer]);
 
 
 
-  // Hail frequency heat map layer - uses full 76-year NOAA dataset
+  // Storm Density heatmap: OFF by default, scoped to user-chosen window.
+  // When toggled off, remove the layers so they don't linger on the map.
   useEffect(() => {
     const map = mapInstance.current;
     if (!map || !mapLoaded) return;
+
+    if (!showStormDensity) {
+      if (map.getLayer('hail-frequency-outline')) map.removeLayer('hail-frequency-outline');
+      if (map.getLayer('hail-frequency-fill')) map.removeLayer('hail-frequency-fill');
+      if (map.getSource('hail-frequency')) map.removeSource('hail-frequency');
+      return;
+    }
+
+    let abort: AbortController | null = null;
+    const bump = (d: number) => setLoadingCount((c) => Math.max(0, c + d));
 
     const loadHeatmap = async () => {
       const bounds = map.getBounds();
@@ -561,30 +609,31 @@ export default function StormMap({
         east: String(bounds.getEast()),
         west: String(bounds.getWest()),
         gridSize: '0.05',
+        months: String(stormMonths),
       });
 
+      if (abort) abort.abort();
+      abort = new AbortController();
+      const signal = abort.signal;
+      bump(1);
       try {
-        const res = await fetch(`/api/storms/heatmap?${params}`);
+        const res = await fetch(`/api/storms/heatmap?${params}`, { signal });
         if (!res.ok) return;
         const geojson = await res.json();
+        if (signal.aborted) return;
 
         if (map.getSource('hail-frequency')) {
           (map.getSource('hail-frequency') as maplibregl.GeoJSONSource).setData(geojson);
         } else {
           map.addSource('hail-frequency', { type: 'geojson', data: geojson });
-
-          // Add the fill layer BEFORE storm dots so it renders underneath
           const firstStormLayer = map.getLayer('storm-clusters') ? 'storm-clusters' : undefined;
-
           map.addLayer({
             id: 'hail-frequency-fill',
             type: 'fill',
             source: 'hail-frequency',
             paint: {
               'fill-color': [
-                'interpolate',
-                ['linear'],
-                ['get', 'normalized'],
+                'interpolate', ['linear'], ['get', 'normalized'],
                 0, 'rgba(0, 0, 0, 0)',
                 0.1, 'rgba(59, 130, 246, 0.08)',
                 0.3, 'rgba(59, 130, 246, 0.15)',
@@ -595,16 +644,13 @@ export default function StormMap({
               'fill-opacity': 0.8,
             },
           }, firstStormLayer);
-
           map.addLayer({
             id: 'hail-frequency-outline',
             type: 'line',
             source: 'hail-frequency',
             paint: {
               'line-color': [
-                'interpolate',
-                ['linear'],
-                ['get', 'normalized'],
+                'interpolate', ['linear'], ['get', 'normalized'],
                 0, 'rgba(0, 0, 0, 0)',
                 0.3, 'rgba(59, 130, 246, 0.1)',
                 0.7, 'rgba(239, 68, 68, 0.15)',
@@ -614,18 +660,334 @@ export default function StormMap({
             },
           }, firstStormLayer);
         }
-      } catch (err) {
-        console.warn('Failed to load hail frequency heatmap:', err);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') console.warn('Failed to load storm density:', err);
+      } finally {
+        bump(-1);
       }
     };
 
     loadHeatmap();
-
-    // Reload when map moves
-    const handler = () => loadHeatmap();
+    const debouncer = makeDebouncer(300);
+    const handler = () => debouncer.call(loadHeatmap);
     map.on('moveend', handler);
-    return () => { map.off('moveend', handler); };
-  }, [mapLoaded]);
+    return () => {
+      map.off('moveend', handler);
+      debouncer.cancel();
+      if (abort) abort.abort();
+    };
+  }, [mapLoaded, showStormDensity, stormMonths]);
+
+  // Storm Tracks: real NOAA trajectories (LineStrings from start→end points).
+  // This replaces the synthetic grid for meaningful "where did storms actually go" signal.
+  useEffect(() => {
+        const map = mapInstance.current;
+    if (!map || !mapLoaded) return;
+
+    // All layer ids this effect owns (aura → swath → keyline → arrow → point,
+    // in z-order). Listed here so teardown is surgical.
+    const STORM_LAYER_IDS = [
+      // tornado stack
+      'storm-tornado-aura', 'storm-tornado-swath', 'storm-tornado-keyline',
+      // hail stack
+      'storm-hail-aura', 'storm-hail-swath', 'storm-hail-keyline',
+      // wind (no polygon — tapered line only)
+      'storm-wind-line', 'storm-wind-arrow',
+      // point fallbacks
+      'storm-point-tornado', 'storm-point-hail', 'storm-point-wind',
+    ];
+
+    if (!showStormTracks) {
+      STORM_LAYER_IDS.forEach((id) => { if (map.getLayer(id)) map.removeLayer(id); });
+      if (map.getSource('storm-tracks')) map.removeSource('storm-tracks');
+      return;
+    }
+
+    let abort: AbortController | null = null;
+    const bump = (d: number) => setLoadingCount((c) => Math.max(0, c + d));
+
+    const loadTracks = async () => {
+      const bounds = map.getBounds();
+      const params = new URLSearchParams({
+        north: String(bounds.getNorth()),
+        south: String(bounds.getSouth()),
+        east: String(bounds.getEast()),
+        west: String(bounds.getWest()),
+        months: String(stormMonths),
+      });
+
+      if (abort) abort.abort();
+      abort = new AbortController();
+      const signal = abort.signal;
+      bump(1);
+      try {
+        // NEW: /swaths returns mixed-geometry FeatureCollection with `role`
+        // discriminant on each feature (swath | centerline | point).
+        const res = await fetch(`/api/storms/swaths?${params}`, { signal });
+        if (!res.ok) return;
+        const geojson = await res.json();
+        if (signal.aborted) return;
+
+        if (map.getSource('storm-tracks')) {
+          (map.getSource('storm-tracks') as maplibregl.GeoJSONSource).setData(geojson);
+          return;
+        }
+
+        map.addSource('storm-tracks', { type: 'geojson', data: geojson });
+        const before = map.getLayer('storm-clusters') ? 'storm-clusters' : undefined;
+
+        // =====================================================================
+        // Color expressions (reused by several layers — define once).
+        // =====================================================================
+
+        // Tornado: EF scale → red ramp. Matches NWS "Enhanced Fujita" shading.
+        const tornadoColor: any = [
+          'match', ['coalesce', ['get', 'tornadoFScale'], 'EF0'],
+          'EF5', '#450a0a',  // near-black (stone-950)
+          'EF4', '#7c2d12',  // dark red
+          'EF3', '#991b1b',
+          'EF2', '#b91c1c',
+          'EF1', '#dc2626',
+          '#f87171',         // EF0 / unknown
+        ];
+
+        // Hail: size inches → amber→red ramp
+        const hailColor: any = [
+          'interpolate', ['linear'], ['coalesce', ['get', 'hailSizeInches'], 0],
+          0,   '#fbbf24',
+          0.75,'#f59e0b',
+          1.5, '#f97316',
+          2.5, '#dc2626',
+          4,   '#7f1d1d',
+        ];
+
+        // Wind: gust mph → cyan→blue→violet
+        const windColor: any = [
+          'interpolate', ['linear'], ['coalesce', ['get', 'windSpeedMph'], 0],
+          0,   '#7dd3fc',
+          50,  '#38bdf8',
+          75,  '#3b82f6',
+          100, '#6366f1',
+          130, '#8b5cf6',
+        ];
+
+        // =====================================================================
+        // TORNADO STACK — aura → swath → keyline
+        // The polygon geometry is NWS-measured (widthYards) so opacity/gradient
+        // is styling only; width is truth.
+        // =====================================================================
+
+        // Aura: soft halo, huge blur, very transparent → "atmospheric weight"
+        map.addLayer({
+          id: 'storm-tornado-aura',
+          type: 'fill',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'swath'], ['==', ['get', 'type'], 'TORNADO']],
+          paint: {
+            'fill-color': tornadoColor,
+            'fill-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              6, ['*', 0.12, ['coalesce', ['get', 'magnitude'], 0.3]],
+              14, ['*', 0.20, ['coalesce', ['get', 'magnitude'], 0.3]],
+            ],
+            'fill-antialias': true,
+          },
+        }, before);
+
+        // Swath: the actual damage footprint, medium opacity, crisp edge
+        map.addLayer({
+          id: 'storm-tornado-swath',
+          type: 'fill',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'swath'], ['==', ['get', 'type'], 'TORNADO']],
+          paint: {
+            'fill-color': tornadoColor,
+            'fill-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              6,  0.28,
+              11, 0.45,
+              14, 0.55,
+            ],
+            'fill-outline-color': tornadoColor,
+          },
+        }, before);
+
+        // Keyline: the reported centerline — crisp, bright, narrow.
+        // "Fact" layer on top of "feeling" aura.
+        map.addLayer({
+          id: 'storm-tornado-keyline',
+          type: 'line',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'centerline'], ['==', ['get', 'type'], 'TORNADO']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': [
+              'match', ['coalesce', ['get', 'tornadoFScale'], 'EF0'],
+              'EF5', '#fef2f2', 'EF4', '#fee2e2', 'EF3', '#fecaca',
+              'EF2', '#fca5a5', 'EF1', '#f87171',
+              '#fca5a5',
+            ],
+            'line-opacity': 0.95,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 14, 1.8],
+          },
+        }, before);
+
+        // =====================================================================
+        // HAIL STACK — same aura+swath+keyline pattern, but approxWidth flag
+        // means the polygon is climatological, not measured. We render with a
+        // dashed keyline to visually flag the approximation.
+        // =====================================================================
+
+        map.addLayer({
+          id: 'storm-hail-aura',
+          type: 'fill',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'swath'], ['==', ['get', 'type'], 'HAIL']],
+          paint: {
+            'fill-color': hailColor,
+            'fill-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              6, 0.10,
+              14, 0.18,
+            ],
+            'fill-antialias': true,
+          },
+        }, before);
+
+        map.addLayer({
+          id: 'storm-hail-swath',
+          type: 'fill',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'swath'], ['==', ['get', 'type'], 'HAIL']],
+          paint: {
+            'fill-color': hailColor,
+            'fill-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              6,  0.22,
+              11, 0.32,
+              14, 0.42,
+            ],
+          },
+        }, before);
+
+        map.addLayer({
+          id: 'storm-hail-keyline',
+          type: 'line',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'centerline'], ['==', ['get', 'type'], 'HAIL']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': hailColor,
+            'line-opacity': 0.85,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 14, 2.4],
+            'line-dasharray': [2, 2], // dashed = approximate swath
+          },
+        }, before);
+
+        // =====================================================================
+        // WIND — straight-line damage reports, no measured width. Render as
+        // tapered line with arrow endpoint. Keyline only.
+        // =====================================================================
+
+        map.addLayer({
+          id: 'storm-wind-line',
+          type: 'line',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'centerline'], ['==', ['get', 'type'], 'WIND']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': windColor,
+            'line-opacity': 0.65,
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              8, ['*', 1.2, ['coalesce', ['get', 'magnitude'], 0.3]],
+              14, ['*', 4.5, ['coalesce', ['get', 'magnitude'], 0.3]],
+            ],
+            // Gradient along the line: transparent start → opaque end (arrow feel)
+            'line-gradient': [
+              'interpolate', ['linear'], ['line-progress'],
+              0, 'rgba(56,189,248,0)',
+              0.2, 'rgba(56,189,248,0.2)',
+              1, 'rgba(56,189,248,0.95)',
+            ],
+          },
+        } as any, before);
+
+        // =====================================================================
+        // POINT FALLBACK — events with no endpoint (most WIND, some HAIL)
+        // Rendered as circles sized by magnitude, low opacity for density.
+        // =====================================================================
+
+        map.addLayer({
+          id: 'storm-point-tornado',
+          type: 'circle',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'point'], ['==', ['get', 'type'], 'TORNADO']],
+          paint: {
+            'circle-color': tornadoColor,
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              6, 3, 10, ['+', 4, ['*', 6, ['coalesce', ['get', 'magnitude'], 0.3]]],
+              14, ['+', 8, ['*', 16, ['coalesce', ['get', 'magnitude'], 0.3]]],
+            ],
+            'circle-opacity': 0.45,
+            'circle-stroke-color': '#fff',
+            'circle-stroke-width': 1,
+            'circle-stroke-opacity': 0.6,
+          },
+        }, before);
+
+        map.addLayer({
+          id: 'storm-point-hail',
+          type: 'circle',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'point'], ['==', ['get', 'type'], 'HAIL']],
+          paint: {
+            'circle-color': hailColor,
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              6, 2, 10, ['+', 3, ['*', 8, ['coalesce', ['get', 'magnitude'], 0.3]]],
+              14, ['+', 6, ['*', 20, ['coalesce', ['get', 'magnitude'], 0.3]]],
+            ],
+            'circle-opacity': 0.35,
+            'circle-stroke-color': hailColor,
+            'circle-stroke-width': 0.5,
+          },
+        }, before);
+
+        map.addLayer({
+          id: 'storm-point-wind',
+          type: 'circle',
+          source: 'storm-tracks',
+          filter: ['all', ['==', ['get', 'role'], 'point'], ['==', ['get', 'type'], 'WIND']],
+          paint: {
+            'circle-color': windColor,
+            'circle-radius': [
+              'interpolate', ['linear'], ['zoom'],
+              6, 2, 10, ['+', 3, ['*', 6, ['coalesce', ['get', 'magnitude'], 0.3]]],
+              14, ['+', 5, ['*', 14, ['coalesce', ['get', 'magnitude'], 0.3]]],
+            ],
+            'circle-opacity': 0.30,
+          },
+        }, before);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') console.warn('Failed to load storm swaths:', err);
+      } finally {
+        bump(-1);
+      }
+    };
+
+    loadTracks();
+    const debouncer = makeDebouncer(300);
+    const handler = () => debouncer.call(loadTracks);
+    map.on('moveend', handler);
+    return () => {
+      map.off('moveend', handler);
+      debouncer.cancel();
+      if (abort) abort.abort();
+    };
+  }, [mapLoaded, showStormTracks, stormMonths]);
+
 
   // Update storm data
   useEffect(() => {
@@ -844,7 +1206,7 @@ export default function StormMap({
             id: prop.id,
             address: prop.address,
             owner: prop.ownerFullName || '',
-            value: prop.assessedValue || 0,
+            value: prop.marketValue || (prop.assessedValue ? prop.assessedValue * 10 : 0),
             yearBuilt: prop.yearBuilt || 0,
             roofCost: prop.roofData?.estimatedTotalCost || 0,
             roofArea: prop.roofData?.totalAreaSqft || 0,
@@ -1004,6 +1366,26 @@ export default function StormMap({
     <div className={`relative ${className}`}>
       <div ref={mapRef} className="w-full h-full" />
 
+      {/* Top-of-map loading bar — indeterminate stripe while any data fetch is in flight */}
+      {loadingCount > 0 && (
+        <div className="absolute top-0 left-0 right-0 z-20 h-0.5 overflow-hidden pointer-events-none">
+          <div
+            className="h-full bg-amber-400"
+            style={{
+              width: '40%',
+              animation: 'stormmap-loading 1.1s ease-in-out infinite',
+            }}
+          />
+          <style>{`
+            @keyframes stormmap-loading {
+              0%   { transform: translateX(-100%); }
+              50%  { transform: translateX(150%); }
+              100% { transform: translateX(350%); }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Layer toggle */}
       {interactive && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 rounded-lg p-1 text-xs">
@@ -1022,6 +1404,48 @@ export default function StormMap({
               {l.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Storm overlay toggles — beneath the scoring layer selector */}
+      {interactive && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-slate-900/85 backdrop-blur-sm border border-slate-700/50 rounded-lg p-1 text-[11px]">
+          <button
+            onClick={() => setShowStormTracks((v) => !v)}
+            className={
+              'px-2.5 py-1 rounded font-medium transition-colors ' +
+              (showStormTracks ? 'bg-red-500/80 text-white' : 'text-slate-300 hover:bg-slate-700/60')
+            }
+            title="Show real NOAA storm trajectories (last N months)"
+          >
+            Storm Tracks
+          </button>
+          <button
+            onClick={() => setShowStormDensity((v) => !v)}
+            className={
+              'px-2.5 py-1 rounded font-medium transition-colors ' +
+              (showStormDensity ? 'bg-amber-500/80 text-slate-900' : 'text-slate-300 hover:bg-slate-700/60')
+            }
+            title="Show density grid of historical hail/tornado events"
+          >
+            Density
+          </button>
+          <div className="h-4 w-px bg-slate-700 mx-1" />
+          <div className="flex items-center gap-0.5">
+            {[6, 12, 24, 60].map((m) => (
+              <button
+                key={m}
+                onClick={() => setStormMonths(m)}
+                className={
+                  'px-1.5 py-1 rounded font-medium transition-colors ' +
+                  (stormMonths === m ? 'bg-slate-600/90 text-white' : 'text-slate-400 hover:bg-slate-700/60')
+                }
+                title={`Last ${m} months`}
+              >
+                {m}m
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

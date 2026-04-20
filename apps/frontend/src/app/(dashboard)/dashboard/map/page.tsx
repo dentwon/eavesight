@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import api from '@/lib/api';
 import dynamic from 'next/dynamic';
 import { usePreferencesStore } from '@/stores/preferences';
+import { getPropertyValue } from '@/lib/propertyValue';
 
 const StormMap = dynamic(() => import('@/components/map/StormMap'), {
   ssr: false,
@@ -44,6 +45,7 @@ export default function MapPage() {
       address: 'Building ID: ' + building.id,
       ownerFullName: 'Unknown',
       assessedValue: null,
+      marketValue: null,
       yearBuilt: null,
       propertyStorms: [],
     });
@@ -99,11 +101,12 @@ export default function MapPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Assessed Value</p>
+                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Property Value</p>
                       <p className="text-sm font-medium text-white">
-                        {selectedBuilding.assessedValue
-                          ? `$${selectedBuilding.assessedValue.toLocaleString()}`
-                          : 'N/A'}
+                        {(() => {
+                          const v = getPropertyValue(selectedBuilding);
+                          return v ? `$${Math.round(v).toLocaleString()}` : 'N/A';
+                        })()}
                       </p>
                     </div>
                     <div>
