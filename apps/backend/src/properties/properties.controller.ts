@@ -40,16 +40,16 @@ export class PropertiesController {
     return this.propertiesService.findInBounds(n, s, e, w, lim, includeGeometry);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get property by ID' })
-  findOne(@Param('id') id: string) {
-    return this.propertiesService.findOne(id);
-  }
-
   @Get('nearest')
   @ApiOperation({ summary: 'Find nearest known property to GPS coords (for mobile quick-capture)' })
   nearest(@Query('lat') lat: string, @Query('lon') lon: string) {
     return this.propertiesService.nearest(parseFloat(lat), parseFloat(lon));
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get property by ID' })
+  findOne(@Param('id') id: string) {
+    return this.propertiesService.findOne(id);
   }
 
   @Post('lookup')
