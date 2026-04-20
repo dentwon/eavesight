@@ -10,11 +10,29 @@ import { KcsParcelService } from './kcs-parcel.service';
 import { KcsParcelController } from './kcs-parcel.controller';
 import { MadisonParcelService } from './madison-parcel.service';
 import { MadisonParcelController } from './madison-parcel.controller';
+import { MaintenanceProcessor } from './maintenance.processor';
 
 @Module({
   imports: [HttpModule],
   controllers: [HuntsvilleParcelController, KcsParcelController, MadisonParcelController],
-  providers: [CensusService, FemaService, PropertyEnrichmentService, BuildingFootprintsService, HuntsvilleParcelService, KcsParcelService, MadisonParcelService],
-  exports: [CensusService, FemaService, PropertyEnrichmentService, BuildingFootprintsService, HuntsvilleParcelService, KcsParcelService, MadisonParcelService],
+  providers: [
+    CensusService,
+    FemaService,
+    PropertyEnrichmentService,
+    BuildingFootprintsService,
+    HuntsvilleParcelService,
+    KcsParcelService,
+    MadisonParcelService,
+    MaintenanceProcessor,
+  ],
+  exports: [
+    CensusService,
+    FemaService,
+    PropertyEnrichmentService,
+    BuildingFootprintsService,
+    HuntsvilleParcelService,
+    KcsParcelService,
+    MadisonParcelService,
+  ],
 })
 export class DataPipelineModule {}

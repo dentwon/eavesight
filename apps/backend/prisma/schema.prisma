@@ -11,20 +11,20 @@ datasource db {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  passwordHash   String
-  firstName      String?
-  lastName       String?
-  role           UserRole  @default(USER)
-  emailVerified  DateTime?
-  avatar         String?
-  phone          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  firstName     String?
+  lastName      String?
+  role          UserRole  @default(USER)
+  emailVerified DateTime?
+  avatar        String?
+  phone         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   organizationMemberships OrganizationMember[]
-  leads                   Lead[]              @relation("Assignee")
+  leads                   Lead[]               @relation("Assignee")
   sessions                Session[]
   activities              Activity[]
   canvassSessions         CanvassSession[]
@@ -51,20 +51,20 @@ model Session {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  plan      Plan    @default(STARTER)
-  logo      String?
-  website   String?
-  phone     String?
-  address   String?
-  city      String?
-  state     String?
-  zip       String?
+  id               String    @id @default(cuid())
+  name             String
+  plan             Plan      @default(STARTER)
+  logo             String?
+  website          String?
+  phone            String?
+  address          String?
+  city             String?
+  state            String?
+  zip              String?
   stripeCustomerId String?
   trialEndsAt      DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   members     OrganizationMember[]
   leads       Lead[]
@@ -84,11 +84,11 @@ enum Plan {
 }
 
 model OrganizationMember {
-  id             String           @id @default(cuid())
+  id             String        @id @default(cuid())
   organizationId String
   userId         String
-  role           OrgMemberRole   @default(MEMBER)
-  createdAt      DateTime         @default(now())
+  role           OrgMemberRole @default(MEMBER)
+  createdAt      DateTime      @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -105,13 +105,13 @@ enum OrgMemberRole {
 }
 
 model ApiKey {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   orgId     String
   name      String
-  key       String   @unique
+  key       String    @unique
   lastUsed  DateTime?
   expiresAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -119,64 +119,94 @@ model ApiKey {
 }
 
 model Property {
-  id          String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  address     String
-  address2    String?
-  city        String
-  state       String   @db.VarChar(2)
-  zip         String   @db.VarChar(10)
-  county      String?
-  fips        String?  @db.VarChar(5)
+  address  String
+  address2 String?
+  city     String
+  state    String  @db.VarChar(2)
+  zip      String  @db.VarChar(10)
+  county   String?
+  fips     String? @db.VarChar(5)
 
-  lat         Float?
-  lon         Float?
+  lat Float?
+  lon Float?
 
-  propertyType   PropertyType @default(RESIDENTIAL)
-  yearBuilt      Int?
-  sqft           Int?
-  lotSizeSqft    Int?
-  stories        Int?
-  bedrooms       Int?
-  bathrooms      Float?
+  propertyType        PropertyType   @default(RESIDENTIAL)
+  yearBuilt           Int?
+  yearBuiltConfidence DataConfidence @default(NONE)
+  yearBuiltSource     String? // human-readable source tag (e.g. "census-acs-b25035")
+  roofAreaSqft        Float? // denormalized from BuildingFootprint.areaSqft
+  roofSizeClass       String? // RESIDENTIAL | LARGE_RESIDENTIAL | SMALL_COMMERCIAL | MEDIUM_COMMERCIAL | LARGE_COMMERCIAL | WAREHOUSE_INDUSTRIAL
+  sqft                Int?
+  lotSizeSqft         Int?
+  stories             Int?
+  bedrooms            Int?
+  bathrooms           Float?
 
-  assessedValue     Float?
-  marketValue       Float?
-  lastSalePrice     Float?
-  lastSaleDate      DateTime?
-  taxAmount         Float?
+  assessedValue Float?
+  marketValue   Float?
+  lastSalePrice Float?
+  lastSaleDate  DateTime?
+  taxAmount     Float?
 
-  ownerFirstName    String?
-  ownerLastName     String?
-  ownerFullName     String?
-  ownerMailAddress  String?
-  ownerMailCity     String?
-  ownerMailState    String?
-  ownerMailZip      String?
-  ownerOccupied     Boolean?
+  ownerFirstName   String?
+  ownerLastName    String?
+  ownerFullName    String?
+  ownerMailAddress String?
+  ownerMailCity    String?
+  ownerMailState   String?
+  ownerMailZip     String?
+  ownerOccupied    Boolean?
 
-  ownerPhone        String?
-  ownerPhone2       String?
-  ownerEmail        String?
-  ownerEmail2       String?
-  phoneVerified     Boolean  @default(false)
-  emailVerified     Boolean  @default(false)
-  onDncList         Boolean  @default(false)
+  ownerPhone    String?
+  ownerPhone2   String?
+  ownerEmail    String?
+  ownerEmail2   String?
+  phoneVerified Boolean @default(false)
+  emailVerified Boolean @default(false)
+  onDncList     Boolean @default(false)
 
-  parcelId       String?
-  parcelNumber   String?
-  legalDesc      String?
-  zoning         String?
+  parcelId     String?
+  parcelNumber String?
+  legalDesc    String?
+  zoning       String?
 
-  attomId        String?
-  rentcastId     String?
+  attomId    String?
+  rentcastId String?
 
-  source         String?
+  source          String?
   sourceUpdatedAt DateTime?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
+  // Composite scores — recomputed nightly by MaintenanceProcessor
+  urgencyScore     Float?
+  revenuePotential Float?
+  opportunityScore Float?
+  solarScore       Float?
+
+  // Earmark — user flags during/after a storm for inspection
+  isEarmarked       Boolean   @default(false)
+  earmarkedAt       DateTime?
+  earmarkReason     String?
+  earmarkedByUserId String?
+
+  // Hail exposure from MRMS
+  hailExposureIndex      Float?    @default(0)
+  hailEventCount         Int?      @default(0)
+  hailExposureDetails    Json?     @default("[]")
+  hailExposureComputedAt DateTime?
+
+  // Adjacent OSM business match
+  businessName     String?
+  businessCategory String?
+  businessWebsite  String?
+  businessPhone    String?
+  businessSource   String?
+
+  propertyAlerts    PropertyAlert[]
   propertyStorms    PropertyStorm[]
   leads             Lead[]
   roofData          RoofData?
@@ -203,43 +233,63 @@ enum PropertyType {
   OTHER
 }
 
+/// Provenance / confidence for inferred property fields.
+/// VERIFIED       - authoritative source (assessor scrape, deed, direct record)
+/// ENRICHED       - trusted external API (RentCast, ATTOM — paid)
+/// DEED_FLOOR     - first deed date on file, gives a floor bound on yearBuilt
+/// SUBDIV_PLAT    - subdivision plat year lookup
+/// NEIGHBOR_KNN   - k-nearest-neighbors median of verified anchors
+/// ACS_MEDIAN     - census block-group median (±10yr, every property gets one)
+/// RATIO_GUESS    - building/land value ratio heuristic (worst confidence)
+/// NONE           - no data available
+enum DataConfidence {
+  VERIFIED
+  ENRICHED
+  DEED_FLOOR
+  SUBDIV_PLAT
+  NEIGHBOR_KNN
+  ACS_MEDIAN
+  RATIO_GUESS
+  NONE
+}
+
 model RoofData {
-  id              String   @id @default(cuid())
-  propertyId      String   @unique
+  id         String @id @default(cuid())
+  propertyId String @unique
 
-  totalAreaSqft   Float?
-  pitchDegrees    Float?
-  pitchRatio      String?
-  facets          Int?
+  totalAreaSqft Float?
+  pitchDegrees  Float?
+  pitchRatio    String?
+  facets        Int?
 
-  segments        Json?
+  segments Json?
 
-  material        RoofMaterial?
-  age             Int?
-  condition       RoofCondition?
-  color           String?
+  material  RoofMaterial?
+  age       Int?
+  condition RoofCondition?
+  color     String?
 
-  ridgeLength     Float?
-  hipLength       Float?
-  valleyLength    Float?
-  eaveLength      Float?
-  rakeLength      Float?
-  flashingLength  Float?
+  ridgeLength    Float?
+  hipLength      Float?
+  valleyLength   Float?
+  eaveLength     Float?
+  rakeLength     Float?
+  flashingLength Float?
 
-  estimatedSquares     Float?
-  estimatedWasteFactor Float?
+  estimatedSquares      Float?
+  estimatedWasteFactor  Float?
   estimatedMaterialCost Float?
   estimatedLaborCost    Float?
   estimatedTotalCost    Float?
 
-  source          String?
-  confidence      Float?
-  measuredAt      DateTime?
+  source     String?
+  confidence Float?
+  measuredAt DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("roof_data")
 }
@@ -268,63 +318,64 @@ enum RoofCondition {
 }
 
 model BuildingFootprint {
-  id            String   @id @default(cuid())
-  propertyId    String   @unique
+  id         String @id @default(cuid())
+  propertyId String @unique
 
-  geometry      Json
-  areaSqft      Float?
-  centroidLat   Float?
-  centroidLon   Float?
+  geometry    Json
+  areaSqft    Float?
+  centroidLat Float?
+  centroidLon Float?
 
-  source        String
-  sourceId      String?
+  source   String
+  sourceId String?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([centroidLat, centroidLon])
   @@map("building_footprints")
 }
 
 model StormEvent {
-  id          String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  type        StormType
-  severity    Severity?
-  date        DateTime
-  endDate     DateTime?
+  type     StormType
+  severity Severity?
+  date     DateTime
+  endDate  DateTime?
 
-  city        String?
-  county      String?
-  state       String  @db.VarChar(2)
-  lat         Float?
-  lon         Float?
-  endLat      Float?
-  endLon      Float?
+  city   String?
+  county String?
+  state  String  @db.VarChar(2)
+  lat    Float?
+  lon    Float?
+  endLat Float?
+  endLon Float?
 
-  hailSizeInches   Float?
-  windSpeedMph     Float?
-  tornadoFScale    String?
+  hailSizeInches Float?
+  windSpeedMph   Float?
+  tornadoFScale  String?
 
-  pathGeometry     Json?
-  affectedArea     Json?
-  widthYards       Float?
-  lengthMiles      Float?
+  pathGeometry Json?
+  affectedArea Json?
+  widthYards   Float?
+  lengthMiles  Float?
 
-  damageEstimate   Float?
-  deathsDirect     Int?
-  injuriesDirect   Int?
+  damageEstimate    Float?
+  deathsDirect      Int?
+  injuriesDirect    Int?
   propertiesDamaged Int?
 
   description String?
   source      String?
   sourceId    String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   propertyStorms PropertyStorm[]
+  propertyAlerts PropertyAlert[]
 
   @@index([date])
   @@index([state, date])
@@ -351,15 +402,15 @@ enum Severity {
 }
 
 model PropertyStorm {
-  id           String   @id @default(cuid())
-  propertyId   String
-  stormEventId String
+  id             String       @id @default(cuid())
+  propertyId     String
+  stormEventId   String
   distanceMeters Float?
-  affected     Boolean  @default(false)
-  damageLevel  DamageLevel?
-  claimFiled   Boolean?
-  permitPulled Boolean?
-  createdAt    DateTime @default(now())
+  affected       Boolean      @default(false)
+  damageLevel    DamageLevel?
+  claimFiled     Boolean?
+  permitPulled   Boolean?
+  createdAt      DateTime     @default(now())
 
   property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   stormEvent StormEvent @relation(fields: [stormEventId], references: [id], onDelete: Cascade)
@@ -377,47 +428,47 @@ enum DamageLevel {
 }
 
 model Lead {
-  id             String      @id @default(cuid())
-  orgId          String
-  propertyId     String?
-  parcelId       String?  // Madison County PIN for parcel-based leads
+  id         String  @id @default(cuid())
+  orgId      String
+  propertyId String?
+  parcelId   String? // Madison County PIN for parcel-based leads
 
-  firstName      String?
-  lastName       String?
-  email          String?
-  phone          String?
+  firstName String?
+  lastName  String?
+  email     String?
+  phone     String?
 
-  status         LeadStatus  @default(NEW)
-  source         String?
-  score          Int         @default(50)
-  priority       Priority    @default(MEDIUM)
+  status   LeadStatus @default(NEW)
+  source   String?
+  score    Int        @default(50)
+  priority Priority   @default(MEDIUM)
 
-  assigneeId     String?
-  assignedAt     DateTime?
+  assigneeId String?
+  assignedAt DateTime?
 
-  quotedAmount   Float?
-  contractAmount Float?
-  insuranceClaim Boolean?
+  quotedAmount     Float?
+  contractAmount   Float?
+  insuranceClaim   Boolean?
   insuranceCarrier String?
-  deductible     Float?
+  deductible       Float?
 
-  notes          String?
-  tags           String[]
+  notes String?
+  tags  String[]
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  contactedAt     DateTime?
-  appointmentAt   DateTime?
-  inspectedAt     DateTime?
-  quotedAt        DateTime?
-  convertedAt     DateTime?
-  lostAt          DateTime?
-  lostReason      String?
+  contactedAt   DateTime?
+  appointmentAt DateTime?
+  inspectedAt   DateTime?
+  quotedAt      DateTime?
+  convertedAt   DateTime?
+  lostAt        DateTime?
+  lostReason    String?
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   property     Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  assignee     User?       @relation("Assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee     User?        @relation("Assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   activities   Activity[]
 
   @@index([orgId, status])
@@ -447,21 +498,21 @@ enum Priority {
 }
 
 model Activity {
-  id         String       @id @default(cuid())
+  id         String  @id @default(cuid())
   leadId     String?
   propertyId String?
   userId     String?
 
-  type       ActivityType
-  title      String
-  notes      String?
-  metadata   Json?
+  type     ActivityType
+  title    String
+  notes    String?
+  metadata Json?
 
-  createdAt  DateTime     @default(now())
+  createdAt DateTime @default(now())
 
-  lead       Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  property   Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([leadId, createdAt])
   @@map("activities")
@@ -480,45 +531,45 @@ enum ActivityType {
 }
 
 model CanvassSession {
-  id          String   @id @default(cuid())
-  userId      String
+  id     String @id @default(cuid())
+  userId String
 
-  startedAt   DateTime @default(now())
-  endedAt     DateTime?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
 
-  route       Json?
+  route Json?
 
-  doorsKnocked  Int    @default(0)
-  doorsAnswered  Int   @default(0)
-  leadsGenerated Int   @default(0)
+  doorsKnocked   Int @default(0)
+  doorsAnswered  Int @default(0)
+  leadsGenerated Int @default(0)
 
-  notes       String?
+  notes String?
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("canvass_sessions")
 }
 
 model Campaign {
-  id          String        @id @default(cuid())
-  orgId       String
-  name        String
-  type        CampaignType
-  status      CampaignStatus @default(DRAFT)
+  id     String         @id @default(cuid())
+  orgId  String
+  name   String
+  type   CampaignType
+  status CampaignStatus @default(DRAFT)
 
   targetZips     String[]
   targetStormIds String[]
   targetMinScore Int?
 
-  subject     String?
-  body        String?
-  template    String?
+  subject  String?
+  body     String?
+  template String?
 
-  sentCount      Int   @default(0)
-  deliveredCount Int   @default(0)
-  openedCount    Int   @default(0)
-  clickedCount   Int   @default(0)
-  repliedCount   Int   @default(0)
+  sentCount      Int @default(0)
+  deliveredCount Int @default(0)
+  openedCount    Int @default(0)
+  clickedCount   Int @default(0)
+  repliedCount   Int @default(0)
 
   scheduledAt DateTime?
   startedAt   DateTime?
@@ -547,80 +598,81 @@ enum CampaignStatus {
 }
 
 model PropertyEnrichment {
-  id                    String   @id @default(cuid())
-  propertyId            String   @unique
+  id         String @id @default(cuid())
+  propertyId String @unique
 
   censusTract           String?
   censusBlockGroup      String?
   medianHouseholdIncome Float?
   medianHomeValue       Float?
+  medianYearBuilt       Int? // ACS B25035 — block group median year structure built
   homeownershipRate     Float?
   medianAge             Float?
   populationDensity     Float?
 
-  femaRiskScore         Float?
-  floodZone             String?
-  disasterDeclarationActive Boolean? @default(false)
-  lastDisasterDate      DateTime?
-  lastDisasterType      String?
+  femaRiskScore             Float?
+  floodZone                 String?
+  disasterDeclarationActive Boolean?  @default(false)
+  lastDisasterDate          DateTime?
+  lastDisasterType          String?
 
-  avgRoofCostPerSqft    Float?
-  avgLaborRatePerHour   Float?
-  materialCostIndex     Float?
+  avgRoofCostPerSqft  Float?
+  avgLaborRatePerHour Float?
+  materialCostIndex   Float?
 
-  stormDamageScore      Float?
-  leadQualityScore      Float?
+  stormDamageScore          Float?
+  leadQualityScore          Float?
   roofReplacementLikelihood Float?
 
-  estimatedRoofSqft     Int?
-  estimatedJobValue     Int?
-  solarRoofData         Json?
+  estimatedRoofSqft Int?
+  estimatedJobValue Int?
+  solarRoofData     Json?
 
-  ownerName             String?
-  ownerPhone            String?
-  ownerEmail            String?
-  ownerMailingAddress   String?
-  skipTraceData         Json?
+  ownerName           String?
+  ownerPhone          String?
+  ownerEmail          String?
+  ownerMailingAddress String?
+  skipTraceData       Json?
 
-  source                String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  source    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  property              Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_enrichments")
 }
 
 model DncEntry {
-  id          String   @id @default(cuid())
-  phone       String   @unique
-  source      String
-  addedAt     DateTime @default(now())
+  id      String   @id @default(cuid())
+  phone   String   @unique
+  source  String
+  addedAt DateTime @default(now())
 
   @@index([phone])
   @@map("dnc_entries")
 }
 
 model DataIngestionJob {
-  id         String             @id @default(cuid())
-  type       String
-  status     IngestionStatus    @default(PENDING)
+  id     String          @id @default(cuid())
+  type   String
+  status IngestionStatus @default(PENDING)
 
-  state      String?
-  county     String?
-  zipCode    String?
+  state   String?
+  county  String?
+  zipCode String?
 
-  totalRecords    Int    @default(0)
-  processedRecords Int   @default(0)
-  errorCount      Int    @default(0)
+  totalRecords     Int @default(0)
+  processedRecords Int @default(0)
+  errorCount       Int @default(0)
 
   startedAt   DateTime?
   completedAt DateTime?
   error       String?
   metadata    Json?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("data_ingestion_jobs")
 }
@@ -649,17 +701,17 @@ model Territory {
 }
 
 model ApiUsage {
-  id          String   @id @default(uuid())
-  orgId       String
-  org         Organization @relation(fields: [orgId], references: [id])
-  service     String
-  endpoint    String
-  credits     Int      @default(1)
-  costCents   Int      @default(0)
-  metadata    Json?
-  propertyId  String?
-  leadId      String?
-  createdAt   DateTime @default(now())
+  id         String       @id @default(uuid())
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  service    String
+  endpoint   String
+  credits    Int          @default(1)
+  costCents  Int          @default(0)
+  metadata   Json?
+  propertyId String?
+  leadId     String?
+  createdAt  DateTime     @default(now())
 
   @@index([orgId, service])
   @@index([orgId, createdAt])
@@ -668,15 +720,15 @@ model ApiUsage {
 }
 
 model ApiQuota {
-  id            String   @id @default(uuid())
+  id            String       @id @default(uuid())
   orgId         String
   org           Organization @relation(fields: [orgId], references: [id])
   service       String
   monthlyLimit  Int
-  usedThisMonth Int      @default(0)
+  usedThisMonth Int          @default(0)
   resetAt       DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@unique([orgId, service])
   @@map("api_quotas")
@@ -687,64 +739,64 @@ model ApiQuota {
 model MadisonParcelData {
   id String @id @default(cuid())
 
-  pin                    String   @unique // Parcel ID (primary key)
-  objectId               Int?     // ArcGIS OBJECTID
+  pin      String @unique // Parcel ID (primary key)
+  objectId Int? // ArcGIS OBJECTID
 
-  propertyAddress        String?
-  totalBuildingValue     Float?
-  totalAppraisedValue    Float?
-  acres                  Float?
-  zoning                 String?
-  eDistrictName          String?
-  wetland                String?
-  floodZone              String?
-  highSchool             String?
-  hubZone                String?
-  industrialPark         String?
-  localHistoricDistrict  String?
+  propertyAddress          String?
+  totalBuildingValue       Float?
+  totalAppraisedValue      Float?
+  acres                    Float?
+  zoning                   String?
+  eDistrictName            String?
+  wetland                  String?
+  floodZone                String?
+  highSchool               String?
+  hubZone                  String?
+  industrialPark           String?
+  localHistoricDistrict    String?
   nationalHistoricDistrict String?
-  historicBuilding       String?
-  opportunityZone        String?
-  tifDistrict            String?
-  slopeDistrict          String?
-  trafficCount           Int?
-  majorRoad              String?
+  historicBuilding         String?
+  opportunityZone          String?
+  tifDistrict              String?
+  slopeDistrict            String?
+  trafficCount             Int?
+  majorRoad                String?
 
   // Proximity flags (within 15/30 min drive)
-  bridgeStreet15         String?
-  hospital15             String?
-  marshall15             String?
-  nhip15                 String?
-  toyota15               String?
-  bridgeStreet30         String?
-  hospital30             String?
-  marshall30             String?
-  nhip30                 String?
-  toyota30               String?
+  bridgeStreet15 String?
+  hospital15     String?
+  marshall15     String?
+  nhip15         String?
+  toyota15       String?
+  bridgeStreet30 String?
+  hospital30     String?
+  marshall30     String?
+  nhip30         String?
+  toyota30       String?
 
   // Owner info (from KCSGIS layer 185)
-  propertyOwner          String?
-  accountOwner           String?
-  mailingAddress         String?
-  mailingAddressFull     String?
-  previousOwners         String?
-  taxDistrict            String?
-  totalLandValue         Float?
-  totalAssessedValue     Float?
-  subdivision           String?
-  neighborhoodName       String?
-  deedType               String?
-  deedBook               String?
-  deedPage               String?
-  deedDate               DateTime?
+  propertyOwner      String?
+  accountOwner       String?
+  mailingAddress     String?
+  mailingAddressFull String?
+  previousOwners     String?
+  taxDistrict        String?
+  totalLandValue     Float?
+  totalAssessedValue Float?
+  subdivision        String?
+  neighborhoodName   String?
+  deedType           String?
+  deedBook           String?
+  deedPage           String?
+  deedDate           DateTime?
 
   // Harvest tracking
-  lastHarvestedAt       DateTime @default(now())
-  lastOwnerEnrichedAt   DateTime?
+  lastHarvestedAt     DateTime  @default(now())
+  lastOwnerEnrichedAt DateTime?
 
   // Geocoded coordinates
-  lat                    Float?
-  lon                    Float?
+  lat Float?
+  lon Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -755,4 +807,31 @@ model MadisonParcelData {
   @@index([totalAppraisedValue])
   @@index([lat, lon])
   @@map("madison_parcel_data")
+}
+
+model PropertyAlert {
+  id           String  @id @default(cuid())
+  propertyId   String
+  stormEventId String?
+
+  alertType   String
+  alertSource String
+  severity    String
+
+  startedAt DateTime
+  endedAt   DateTime?
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  property   Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  stormEvent StormEvent? @relation(fields: [stormEventId], references: [id], onDelete: SetNull)
+
+  @@unique([propertyId, stormEventId, alertType])
+  @@index([active, startedAt(sort: Desc)])
+  @@index([propertyId])
+  @@index([stormEventId])
+  @@map("property_alerts")
 }
