@@ -82,6 +82,7 @@ export class StormsController {
     @Query('east') east: string,
     @Query('west') west: string,
     @Query('gridSize') gridSize?: string,
+    @Query('months') months?: string,
   ) {
     return this.stormsService.getHailFrequencyGrid(
       parseFloat(north),
@@ -89,6 +90,55 @@ export class StormsController {
       parseFloat(east),
       parseFloat(west),
       gridSize ? parseFloat(gridSize) : 0.05,
+      months ? parseInt(months) : 24,
+    );
+  }
+
+  @Public()
+  @Get('tracks')
+  @ApiOperation({
+    summary: 'Get storm trajectories (LineStrings) within bbox for last N months',
+  })
+  getTracks(
+    @Query('north') north: string,
+    @Query('south') south: string,
+    @Query('east') east: string,
+    @Query('west') west: string,
+    @Query('months') months?: string,
+    @Query('types') types?: string,
+  ) {
+    const typeList = types ? types.split(',').map(t => t.trim().toUpperCase()) : undefined;
+    return this.stormsService.getStormTracks(
+      parseFloat(north),
+      parseFloat(south),
+      parseFloat(east),
+      parseFloat(west),
+      months ? parseInt(months) : 24,
+      typeList,
+    );
+  }
+
+  @Public()
+  @Get('swaths')
+  @ApiOperation({
+    summary: 'Storm damage footprints (polygon swaths + centerlines + points) for rich map rendering',
+  })
+  getSwaths(
+    @Query('north') north: string,
+    @Query('south') south: string,
+    @Query('east') east: string,
+    @Query('west') west: string,
+    @Query('months') months?: string,
+    @Query('types') types?: string,
+  ) {
+    const typeList = types ? types.split(',').map(t => t.trim().toUpperCase()) : undefined;
+    return this.stormsService.getStormSwaths(
+      parseFloat(north),
+      parseFloat(south),
+      parseFloat(east),
+      parseFloat(west),
+      months ? parseInt(months) : 24,
+      typeList,
     );
   }
 

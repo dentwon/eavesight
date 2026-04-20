@@ -2,101 +2,175 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+ * Theme tokens (HSL triplets — no commas, usable in hsl(var(--x) / <alpha>))
+ * Dark and light are true counterparts. Flip via `class="dark"` on <html>.
+ * ========================================================================== */
 @layer base {
   :root {
-    --background: 15 23 42; /* slate-900 */
-    --foreground: 248 250 252; /* slate-50 */
+    /* Surfaces */
+    --background: 0 0% 100%;              /* page bg */
+    --foreground: 222 47% 11%;            /* primary text */
+    --muted: 210 40% 96%;                 /* subtle bg (input, row hover) */
+    --muted-foreground: 215 16% 47%;      /* secondary text */
+    --card: 0 0% 100%;                    /* card bg */
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --border: 214 32% 91%;                /* card borders, dividers */
+    --input: 214 32% 91%;                 /* input border */
+    --ring: 221 83% 53%;                  /* focus ring */
+
+    /* Brand — Steel Blue */
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Accent — Amber */
+    --accent: 37 92% 50%;
+    --accent-foreground: 48 96% 9%;
+
+    /* Semantic */
+    --success: 142 71% 45%;
+    --success-foreground: 143 85% 96%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 9%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+
+    /* Radius */
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 7%;              /* slate-950-ish */
+    --foreground: 210 40% 98%;
+    --muted: 217 33% 17%;                  /* slate-800 */
+    --muted-foreground: 215 20% 65%;       /* slate-400 */
+    --card: 222 44% 11%;                   /* slate-900 */
+    --card-foreground: 210 40% 98%;
+    --popover: 222 44% 11%;
+    --popover-foreground: 210 40% 98%;
+    --border: 217 33% 20%;                 /* slate-800/700 blend */
+    --input: 217 33% 20%;
+    --ring: 221 83% 53%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+
+    --accent: 38 92% 50%;
+    --accent-foreground: 48 96% 9%;
+
+    --success: 142 65% 45%;
+    --success-foreground: 143 85% 96%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 96% 9%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --info: 199 89% 48%;
+    --info-foreground: 210 40% 98%;
+  }
+
+  * {
+    @apply border-border;
   }
 
   body {
-    @apply bg-slate-900 text-slate-50 antialiased;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Custom scrollbar - dark theme */
+/* ============================================================================
+ * Scrollbars — respect current theme
+ * ========================================================================== */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: hsl(var(--muted));
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: hsl(var(--muted-foreground) / 0.35);
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: hsl(var(--muted-foreground) / 0.55);
 }
 
-/* Map styles */
+/* ============================================================================
+ * Maplibre popup surface — themed
+ * ========================================================================== */
 .maplibregl-popup-content {
-  @apply rounded-lg shadow-card p-4;
+  @apply rounded-lg shadow-lg p-4 bg-popover text-popover-foreground border border-border;
 }
-
 .maplibregl-popup-close-button {
-  @apply text-lg font-bold px-2;
+  @apply text-lg font-bold px-2 text-muted-foreground hover:text-foreground;
 }
 
-/* Animations */
+/* ============================================================================
+ * Legacy component classes — themed via tokens so they flip dark/light.
+ * Used by the marketing landing page and older dashboard shells.
+ * New code should prefer components/ui primitives.
+ * ========================================================================== */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg px-6 py-3 font-semibold
+           bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]
+           transition-all duration-200
+           hover:brightness-110 hover:shadow-[0_0_0_3px_hsl(var(--primary)/0.25)]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center rounded-lg px-6 py-3 font-semibold
+           bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))]
+           transition-all duration-200
+           hover:brightness-110 hover:shadow-[0_0_0_3px_hsl(var(--accent)/0.25)]
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .card {
+    @apply bg-[hsl(var(--card))] text-[hsl(var(--card-foreground))]
+           rounded-xl border border-[hsl(var(--border))]
+           shadow-sm overflow-hidden;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200
+           hover:shadow-lg hover:border-[hsl(var(--ring)/0.4)];
+  }
+}
+
+/* ============================================================================
+ * Gradient helpers used across the app
+ * ========================================================================== */
+.text-gradient {
+  @apply bg-clip-text text-transparent;
+  background-image: linear-gradient(to right, hsl(var(--primary)), hsl(var(--accent)));
+}
+
+.bg-gradient-storm {
+  background: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--muted)) 100%);
+}
+.bg-gradient-dark {
+  background: linear-gradient(180deg, hsl(var(--muted)) 0%, hsl(var(--background)) 100%);
+}
+
+/* ============================================================================
+ * Animations — splash / rain / fade
+ * ========================================================================== */
 .animate-fade-in {
   animation: fadeIn 0.5s ease-in-out;
 }
-
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Button styles - Dark theme */
-.btn-primary {
-  @apply text-white px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:shadow-glow;
-  background-color: #3b82f6; /* primary-500 */
-}
-.btn-primary:hover {
-  background-color: #2563eb; /* primary-600 */
-}
-
-.btn-accent {
-  @apply text-slate-900 px-6 py-3 rounded-lg font-semibold transition-all duration-200 hover:shadow-glow-accent;
-  background-color: #f59e0b; /* accent-500 */
-}
-.btn-accent:hover {
-  background-color: #d97706; /* accent-600 */
-}
-
-/* Card styles - Dark theme */
-.card {
-  @apply bg-slate-800 rounded-xl shadow-card border border-slate-700/50 overflow-hidden;
-}
-
-.card-hover {
-  @apply transition-all duration-200 hover:shadow-glow hover:border-slate-600;
-}
-
-/* Gradient text */
-.text-gradient {
-  @apply bg-clip-text text-transparent;
-  background-image: linear-gradient(to right, #60a5fa, #f59e0b);
-}
-
-/* Section gradients */
-.bg-gradient-storm {
-  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-}
-
-.bg-gradient-dark {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Drop appears small high up, grows as it falls, then creates splash */
@@ -165,12 +239,7 @@
   animation: splash 2s ease-out infinite;
 }
 
-
-/* Mobile-first layout utilities */
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
+/* Sidebar / settings entry animation */
 @keyframes fadeInSlide {
   from { opacity: 0; transform: translateX(-4px); }
   to { opacity: 1; transform: translateX(0); }
@@ -178,4 +247,18 @@
 
 .animate-fadeIn {
   animation: fadeInSlide 0.15s ease-out;
+}
+
+/* Mobile-first layout utilities */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Pulsing red alert (storm alert banner) */
+@keyframes alertPulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--destructive) / 0.45); }
+  50%      { box-shadow: 0 0 0 12px hsl(var(--destructive) / 0); }
+}
+.animate-alert-pulse {
+  animation: alertPulse 1.6s ease-out infinite;
 }

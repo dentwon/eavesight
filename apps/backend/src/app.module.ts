@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module';
 import { MapModule } from './map/map.module';
 import { PrismaModule } from './common/prisma.module';
 import { DataPipelineModule } from './data-pipeline/data-pipeline.module';
+import { AlertsModule } from './alerts/alerts.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { DataPipelineModule } from './data-pipeline/data-pipeline.module';
     HealthModule,
     MapModule,
     DataPipelineModule,
+    AlertsModule,
   ],
 })
 export class AppModule {}
