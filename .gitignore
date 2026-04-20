@@ -38,3 +38,16 @@ coverage/
 *.tar.gz
 node_modules
 *.tsbuildinfo
+
+# Large data / pipeline outputs — kept locally on VM, never committed
+data/
+output/
+*.pmtiles
+*.mbtiles
+*.ndjson
+*.grib2
+*.geojsonl
+
+# Keep small demo pmtiles used by the frontend
+!apps/frontend/public/buildings-huntsville.pmtiles
+!apps/frontend/public/buildings-v3.pmtiles
