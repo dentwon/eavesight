@@ -74,18 +74,20 @@ Texas + Atlanta first, Southeast fills in around them.
 
 ## 3. Y5 stretch-case forecast under each path
 
-(Stretch = aggressive marketing in every metro: free promo + Facebook ads + supply-house deals + 1 PR hit per metro.)
+(Stretch = aggressive marketing in every metro: free promo + Facebook ads + supply-house deals + 1 PR hit per metro. Cost basis: $0.045/reveal Y1 → $0.020 Y5 with cache + Tracerfy Normal Trace switch.)
 
 | Metric | Path A | Path B-Lite | Path B (full) |
 |---|---|---|---|
 | Y5 active metros | 8 | 9 | 10 |
 | Y5 paying subs | 800 | ~950 | ~1,025 |
-| Y5 blended ARPU (incl overage) | $220 | $235 | $240 |
-| **Y5 Gross MRR** | $176k | **$223k** | **$246k** |
-| **Y5 Gross ARR** | **$2.11M** | **$2.69M** | **$2.95M** |
-| Y5 Net ARR (after COGS + per-org overhead) | $1.90M | $2.42M | $2.65M |
-| Y5 headcount opex | $1.0M | $1.3M | $1.5M |
-| **Y5 EBITDA** | +$750k | +$870k | +$950k |
+| Y5 blended ARPU (incl overage) | $230 | $245 | $250 |
+| **Y5 Gross MRR** | $184k | **$208k** | **$256k** |
+| **Y5 Gross ARR** | **$2.21M** | **$2.49M** | **$3.07M** |
+| Y5 Net ARR (after COGS + per-org overhead) | $1.99M | **$2.25M** | $2.77M |
+| Y5 headcount opex + CAC | $1.04M | $1.19M | $1.55M |
+| **Y5 EBITDA** | +$950k | **+$1.06M** | +$1.22M |
+
+Numbers updated to reflect the Tracerfy Normal-tier cost basis ($0.02/record vs $0.04 prior assumption — see UNIT_ECONOMICS_MODEL doc §1.A). Y5 EBITDA improves ~$200-300k vs prior version because per-reveal cost drops by half.
 
 Y5 deltas across paths are modest because new metros take 2-4 years to penetrate. The strategic value of Path B-Lite vs Path A doesn't show until Y6+.
 
@@ -93,13 +95,13 @@ Y5 deltas across paths are modest because new metros take 2-4 years to penetrate
 
 ## 4. Y10 ceiling (saturation case)
 
-This is where the strategic choice really matters.
+This is where the strategic choice really matters. Numbers reflect updated cost basis (Tracerfy Normal + cache hits → ~$0.015/reveal effective by Y10).
 
 | Metric | Path A | Path B-Lite | Path B (full) |
 |---|---|---|---|
 | Y10 paying subs | ~2,500 | ~4,500 | ~6,000 |
-| **Y10 Gross ARR** | **$6M** | **$10-11M** | **$13-15M** |
-| Y10 EBITDA estimate | $1.5-2M | $3-4M | $5-7M |
+| **Y10 Gross ARR** | **$6.5M** | **$11-12M** | **$14-16M** |
+| Y10 EBITDA estimate | $1.7-2.2M | **$3.5-4.5M** | $5.5-8M |
 
 Atlanta + DFW saturating in Y8-Y10 is what unlocks the $10M+ ceiling. Without those metros, Eavesight caps out around $5M ARR.
 
