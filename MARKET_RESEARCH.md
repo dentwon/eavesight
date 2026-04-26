@@ -200,43 +200,45 @@ Eavesight enters a fragmented market where roofing contractors currently pay $20
 | Enterprise | $500-1,000/mo | API, SSO, unlimited | Large companies |
 | Pay-per-lead | $5-15/lead | No subscription | Occasional users |
 
-### Eavesight Pricing Strategy
+### Eavesight Pricing Strategy (live, April 2026)
 
-**Penetration Pricing (Year 1)**
-- Starter: $49/mo (normally $99) - 1 user, 500 lookups, 1 metro
-- Professional: $149/mo (normally $299) - 5 users, 2,500 lookups, 3 metros
-- Enterprise: $499/mo (normally $799) - Unlimited, API, 10K lookups
+Flat-company pricing with metered property reveals. No per-user fees on any plan.
 
-**Regular Pricing (Year 2+)**
-- Starter: $99/mo
-- Professional: $299/mo
-- Enterprise: $799/mo
+- **Scout — Free** — 5 reveals/mo, county-wide storm alerts, basic property data (funnel opener)
+- **Business — $99/mo** — 50 reveals/mo, zip-level alerts, 1-county map, 1 canvass route/day, owner name + mailing address, 5 roof-measurement credits
+- **Pro — $249/mo** *(featured)* — 200 reveals/mo, property-level push alerts, full 0-100 lead scoring, multi-county access, unlimited canvassing routes, owner name + phone + mailing, 15 roof-measurement credits
+- **Enterprise — Custom** — unlimited reveals, API access, custom scoring, territory locking, team routing + GPS, 40 roof-measurement credits, priority support
 
-**Value Proposition**: 60-80% cheaper than competitors with equal or better functionality
+**Launch promo (live):** First 100 users get 3 months free. 14-day trial on all paid plans. No contract.
+
+**Unit of value:** metered property reveals — 1 reveal unlocks owner + contact + property + storm profile for one address.
+
+**Value Proposition**: flat-rate pricing at 40-70% below HailTrace ($500+) / Telefi ($300+) / AccuLynx ($400+); integrated storm + property + owner + roof-age stack none of them offer together.
 
 ---
 
 ## Go-to-Market Analysis
 
-### Launch Strategy
+### Launch Strategy (updated April 2026)
 
-**Phase 1: Beta (Weeks 1-4)**
-- Recruit 10 beta users from personal network
-- Offer free 3-month subscription
-- Collect intensive feedback
-- Iterate product rapidly
+The MVP is live; this is the current-state plan, not a greenfield timeline.
 
-**Phase 2: Soft Launch (Weeks 5-8)**
-- Open general availability
-- Offer 50% off first 3 months
-- Target 25 paying customers
-- Begin content marketing
+**Phase 1: Closed Beta (now)**
+- Huntsville/North Alabama cohort — "first 100 users get 3 months free" landing-page promo
+- Primary goal: product feedback + skip-trace / roof-data integrations wired before meters bite
+- Paid conversion begins ~month 3 as promos unwind
 
-**Phase 3: Scale (Months 3-12)**
-- Increase marketing spend
-- Add referral program
-- Launch partner integrations
-- Begin enterprise sales
+**Phase 2: Paid Conversion + Nashville Ingest (months 4-6)**
+- Convert first promo cohort to Business / Pro
+- Ingest Nashville CAD data (Davidson / Williamson / Rutherford / Sumner / Wilson)
+- Open Nashville waitlist on landing page
+- Begin content marketing + referral flywheel
+
+**Phase 3: Multi-Metro + Enterprise (months 7-12)**
+- Launch Nashville paid tier (~month 10)
+- First Enterprise pilot deals (multi-crew operations)
+- Partnership channel: material suppliers (GAF, Owens Corning), roofing associations (NRCA)
+- Scale paid acquisition in both metros
 
 ### Channel Analysis
 

@@ -1,19 +1,24 @@
 #!/usr/bin/env node
 /**
- * harvest-huntsville-permits.js
+ * harvest-huntsville-permits.js  (2026-04-21 rewrite)
  *
- * Pulls daily building/roofing permits from Huntsville's Accela Citizen Access
- * open-data endpoint and stores them in the `building_permits` table. Used for:
+ * Pulls building permits + certificates of occupancy from the live City of
+ * Huntsville ArcGIS Server. Ingests into `building_permits` (idempotent upsert
+ * on (source, permit_number)) and backfills `properties.yearBuilt` from
+ * new-construction CoCs.
  *
- *   1. Competitor intel  — who's pulling re-roof / hail-repair permits
- *   2. Lead signal       — homeowners who pulled repair permits but may still
- *                          be eligible for upsell / warranty service
- *   3. Territory saturation — how many permits exist in a ZIP / street grid
+ * Live endpoints:
+ *   permits : /Licenses/BuildingPermits/MapServer/0
+ *   cocs    : /Licenses/BuildingPermits/MapServer/1
  *
- * Idempotent: upserts on (permitNumber, source). Safe to run daily via cron.
+ * Replaces the old script that hit a dead services5.arcgis.com org.
  *
  * Usage:
- *   node scripts/harvest-huntsville-permits.js [--since=YYYY-MM-DD] [--dry]
+ *   node scripts/harvest-huntsville-permits.js            # full incremental (last 30 days)
+ *   node scripts/harvest-huntsville-permits.js --full     # backfill everything
+ *   node scripts/harvest-huntsville-permits.js --since=2024-01-01
+ *   node scripts/harvest-huntsville-permits.js --dry      # don't write to DB
+ *   node scripts/harvest-huntsville-permits.js --skip-cocs
  */
 const { Pool } = require('pg');
 const https = require('https');
@@ -21,218 +26,239 @@ const https = require('https');
 const DB = {
   host: 'localhost',
   port: 5433,
-  user: 'stormvault',
-  password: 'stormvault',
-  database: 'stormvault',
+  user: 'eavesight',
+  password: 'eavesight',
+  database: 'eavesight',
 };
 
-const ROOFING_KEYWORDS = /roof|re-roof|reroof|hail|shingle|metal\s*roof/i;
-const EXTERIOR_KEYWORDS = /siding|gutter|window|exterior|fence|deck/i;
+// Tuning
+const BASE = 'https://maps.huntsvilleal.gov/server/rest/services/Licenses/BuildingPermits/MapServer';
+const PAGE_SIZE = 1000;        // Huntsville allows up to 2000; 1000 is safer
+const REQUEST_TIMEOUT = 30_000;
+const ROOFING_RE = /roof|re-roof|reroof|hail|shingle/i;
+const EXTERIOR_RE = /siding|gutter|window|exterior|fence|deck|stucco/i;
 
-// Huntsville uses Accela Citizen Access REST — the GIS feed exposes permits as
-// a FeatureServer. Endpoint discovered from https://gis.huntsvilleal.gov/
-// (queryable 0-layer with GeoJSON output).
-const HSV_URL =
-  'https://services5.arcgis.com/3vb4wYzbU8B7GZIt/arcgis/rest/services/Building_Permits/FeatureServer/0/query';
-
-const now = new Date();
 const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry');
+const FULL = argv.includes('--full');
+const SKIP_COCS = argv.includes('--skip-cocs');
 const sinceArg = argv.find((a) => a.startsWith('--since='));
-const sinceDate = sinceArg
-  ? new Date(sinceArg.split('=')[1])
-  : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // default: last 7 days
+const sinceDate = FULL
+  ? new Date('1990-01-01')
+  : sinceArg
+    ? new Date(sinceArg.split('=')[1])
+    : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-function log(...args) {
-  console.log(`[${new Date().toISOString()}]`, ...args);
+function log(...a) {
+  console.log(`[${new Date().toISOString()}]`, ...a);
 }
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
     https
-      .get(url, { timeout: 30_000, rejectUnauthorized: false }, (res) => {
+      .get(url, { timeout: REQUEST_TIMEOUT, rejectUnauthorized: false }, (res) => {
         const chunks = [];
         res.on('data', (c) => chunks.push(c));
         res.on('end', () => {
           try {
             resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
           } catch (e) {
-            reject(e);
+            reject(new Error(`JSON parse failed for ${url}: ${e.message}`));
           }
         });
       })
-      .on('error', reject);
+      .on('error', reject)
+      .on('timeout', () => reject(new Error(`timeout ${url}`)));
   });
 }
 
-async function ensureTable(pool) {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS building_permits (
-      id              TEXT PRIMARY KEY,
-      source          TEXT NOT NULL,
-      permit_number   TEXT NOT NULL,
-      permit_type     TEXT,
-      description     TEXT,
-      status          TEXT,
-      issued_at       TIMESTAMP,
-      finaled_at      TIMESTAMP,
-      address         TEXT,
-      city            TEXT,
-      zip             TEXT,
-      parcel_id       TEXT,
-      contractor      TEXT,
-      contractor_type TEXT,
-      valuation       NUMERIC,
-      lat             DOUBLE PRECISION,
-      lon             DOUBLE PRECISION,
-      is_roofing      BOOLEAN DEFAULT FALSE,
-      is_exterior     BOOLEAN DEFAULT FALSE,
-      property_id     TEXT,
-      raw             JSONB,
-      created_at      TIMESTAMP DEFAULT now(),
-      updated_at      TIMESTAMP DEFAULT now()
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_permits_source_number
-      ON building_permits(source, permit_number);
-    CREATE INDEX IF NOT EXISTS idx_permits_issued ON building_permits(issued_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_permits_contractor ON building_permits(contractor);
-    CREATE INDEX IF NOT EXISTS idx_permits_roofing ON building_permits(is_roofing) WHERE is_roofing = TRUE;
-    CREATE INDEX IF NOT EXISTS idx_permits_property ON building_permits(property_id);
-  `);
-}
-
-async function fetchPage(offset, pageSize, sinceTs) {
-  const where = `ISSUED_DATE >= ${sinceTs}`;
+async function queryLayer(layerId, offset, sinceIso) {
+  // Huntsville's ArcGIS Server only accepts date-literal SQL, not epoch-ms.
+  // Probed: `date 'YYYY-MM-DD'` works; bare string and bare bigint fail with
+  // extendedCode -2147220985.
+  const where = `Permit_Issue_DateTime >= date '${sinceIso}'`;
   const params = new URLSearchParams({
     where,
     outFields: '*',
     returnGeometry: 'true',
+    outSR: '4326',
     resultOffset: String(offset),
-    resultRecordCount: String(pageSize),
-    f: 'geojson',
-    orderByFields: 'ISSUED_DATE DESC',
+    resultRecordCount: String(PAGE_SIZE),
+    orderByFields: 'Permit_Issue_DateTime DESC',
+    f: 'json',
   });
-  const url = `${HSV_URL}?${params.toString()}`;
+  const url = `${BASE}/${layerId}/query?${params.toString()}`;
   const data = await fetchJson(url);
+  if (data.error) throw new Error(`ArcGIS error: ${JSON.stringify(data.error)}`);
   return data.features || [];
 }
 
-function classify(desc, type) {
-  const text = `${desc || ''} ${type || ''}`;
+function classify(typeOfWork, occupancyType, occupancySubtype) {
+  const t = `${typeOfWork || ''} ${occupancySubtype || ''}`;
   return {
-    is_roofing: ROOFING_KEYWORDS.test(text),
-    is_exterior: EXTERIOR_KEYWORDS.test(text),
+    is_roofing: ROOFING_RE.test(t),
+    is_exterior: EXTERIOR_RE.test(t),
   };
 }
 
-async function matchPropertyId(pool, lat, lon) {
+async function matchPropertyByPoint(pool, lat, lon) {
   if (!lat || !lon) return null;
   const { rows } = await pool.query(
     `SELECT id FROM properties
        WHERE lat IS NOT NULL AND lon IS NOT NULL
-       ORDER BY ST_SetSRID(ST_MakePoint($1, $2), 4326) <-> ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+         AND abs(lat - $1) < 0.0008
+         AND abs(lon - $2) < 0.001
+       ORDER BY (lat - $1) * (lat - $1) + (lon - $2) * (lon - $2)
        LIMIT 1`,
-    [lon, lat],
+    [lat, lon],
   );
   return rows[0]?.id ?? null;
 }
 
-async function main() {
-  const pool = new Pool(DB);
-  await ensureTable(pool);
+async function ingestBatch(pool, features, source, isCoc) {
+  let upserts = 0;
+  let roofing = 0;
+  let ybUpdates = 0;
 
-  const sinceTs = sinceDate.getTime(); // Accela accepts epoch-ms
-  log('Fetching Huntsville permits since', sinceDate.toISOString(), DRY ? '[DRY-RUN]' : '');
+  for (const f of features) {
+    const a = f.attributes || {};
+    const g = f.geometry;
+    const lon = g?.x ?? null;
+    const lat = g?.y ?? null;
 
+    const permitNumber = a.PermitID ? String(a.PermitID) : null;
+    if (!permitNumber) continue;
+
+    // CoC records use OccupancyNumber -- append to keep them unique from permits
+    const permitKey = isCoc ? `COC-${a.OccupancyNumber || a.PermitID}` : String(a.PermitID);
+
+    const issuedAt = a.Permit_Issue_DateTime; // epoch ms or null
+    const finaledAt = isCoc ? a.Occupancy_Issue_DateTime : null;
+    const desc =
+      [a.TypeOfWork, a.OccupancyType, a.OccupancySubtype, a.Subdivision]
+        .filter(Boolean)
+        .join(' | ') || null;
+    const { is_roofing, is_exterior } = classify(a.TypeOfWork, a.OccupancyType, a.OccupancySubtype);
+    if (is_roofing) roofing++;
+
+    const propertyId = await matchPropertyByPoint(pool, lat, lon);
+
+    if (DRY) {
+      upserts++;
+      continue;
+    }
+
+    const valuation = Number(a.ContractAmount ?? a.ActualCost ?? 0) || null;
+
+    const q = `
+      INSERT INTO building_permits
+        (id, source, permit_number, permit_type, description, status, issued_at, finaled_at,
+         address, city, zip, parcel_id, contractor, contractor_type, valuation,
+         lat, lon, is_roofing, is_exterior, property_id, raw, updated_at)
+      VALUES
+        (gen_random_uuid()::text, $1, $2, $3, $4, $5,
+         CASE WHEN $6::bigint IS NOT NULL THEN to_timestamp($6::double precision / 1000) ELSE NULL END,
+         CASE WHEN $7::bigint IS NOT NULL THEN to_timestamp($7::double precision / 1000) ELSE NULL END,
+         $8, $9, NULL, NULL, NULL, NULL, $10, $11, $12, $13, $14, $15, $16::jsonb, now())
+      ON CONFLICT (source, permit_number)
+      DO UPDATE SET
+        description = EXCLUDED.description,
+        status      = EXCLUDED.status,
+        finaled_at  = EXCLUDED.finaled_at,
+        valuation   = EXCLUDED.valuation,
+        property_id = COALESCE(building_permits.property_id, EXCLUDED.property_id),
+        raw         = EXCLUDED.raw,
+        updated_at  = now();
+    `;
+
+    const { rowCount } = await pool.query(q, [
+      source,                               // $1
+      permitKey,                            // $2
+      a.TypeOfWork || null,                 // $3 permit_type
+      desc,                                 // $4
+      isCoc ? 'Finaled' : 'Issued',         // $5 status
+      issuedAt ?? null,                     // $6
+      finaledAt ?? null,                    // $7
+      a.Address || null,                    // $8
+      'Huntsville',                         // $9
+      valuation,                            // $10
+      lat,                                  // $11
+      lon,                                  // $12
+      is_roofing,                           // $13
+      is_exterior,                          // $14
+      propertyId,                           // $15
+      JSON.stringify(a),                    // $16
+    ]);
+    upserts += rowCount;
+
+    // Backfill yearBuilt from CoC new-construction
+    if (
+      isCoc &&
+      propertyId &&
+      a.TypeOfWork === 'New Construction' &&
+      a.Occupancy_Issue_DateTime
+    ) {
+      const yb = new Date(a.Occupancy_Issue_DateTime).getUTCFullYear();
+      if (yb >= 1900 && yb <= new Date().getUTCFullYear()) {
+        const res = await pool.query(
+          `UPDATE properties SET "yearBuilt" = $1, "updatedAt" = now()
+             WHERE id = $2 AND ("yearBuilt" IS NULL OR "yearBuilt" > $1)`,
+          [yb, propertyId],
+        );
+        if (res.rowCount) ybUpdates++;
+      }
+    }
+  }
+  return { upserts, roofing, ybUpdates };
+}
+
+async function harvestLayer(pool, layerId, source, isCoc) {
+  log(`Harvesting layer ${layerId} (${source}) since ${sinceDate.toISOString()}`);
+  const sinceIso = sinceDate.toISOString().slice(0, 10); // YYYY-MM-DD
   let offset = 0;
-  const pageSize = 1000;
   let total = 0;
-  let inserted = 0;
-  let roofingCount = 0;
+  let totalUpserts = 0;
+  let totalRoofing = 0;
+  let totalYb = 0;
 
   while (true) {
     let features;
     try {
-      features = await fetchPage(offset, pageSize, sinceTs);
+      features = await queryLayer(layerId, offset, sinceIso);
     } catch (e) {
-      log('Fetch failed at offset', offset, '—', e.message);
+      log(`Fetch failed offset=${offset}: ${e.message}. Stopping.`);
       break;
     }
     if (!features.length) break;
+    total += features.length;
 
-    for (const f of features) {
-      total++;
-      const a = f.properties || {};
-      const geom = f.geometry;
-      const lon = geom?.coordinates?.[0] ?? null;
-      const lat = geom?.coordinates?.[1] ?? null;
+    const { upserts, roofing, ybUpdates } = await ingestBatch(pool, features, source, isCoc);
+    totalUpserts += upserts;
+    totalRoofing += roofing;
+    totalYb += ybUpdates;
+    log(`  batch offset=${offset} n=${features.length} upsert=${upserts} roof=${roofing} yb+=${ybUpdates}`);
 
-      const permitNumber =
-        a.PERMIT_NUMBER || a.PERMITNUMBER || a.PERMIT_NO || a.RECORD_ID || a.APPLICATION_NUMBER;
-      if (!permitNumber) continue;
-
-      const { is_roofing, is_exterior } = classify(a.DESCRIPTION || a.WORK_DESC, a.PERMIT_TYPE);
-      if (is_roofing) roofingCount++;
-
-      const propertyId = await matchPropertyId(pool, lat, lon);
-
-      if (DRY) continue;
-
-      const { rowCount } = await pool.query(
-        `
-        INSERT INTO building_permits
-          (id, source, permit_number, permit_type, description, status, issued_at, finaled_at,
-           address, city, zip, parcel_id, contractor, contractor_type, valuation,
-           lat, lon, is_roofing, is_exterior, property_id, raw, updated_at)
-        VALUES
-          (gen_random_uuid()::text, $1, $2, $3, $4, $5, to_timestamp($6::double precision / 1000),
-           CASE WHEN $7::bigint IS NOT NULL THEN to_timestamp($7::double precision / 1000) ELSE NULL END,
-           $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20::jsonb, now())
-        ON CONFLICT (source, permit_number)
-        DO UPDATE SET
-          status      = EXCLUDED.status,
-          finaled_at  = EXCLUDED.finaled_at,
-          valuation   = EXCLUDED.valuation,
-          property_id = COALESCE(building_permits.property_id, EXCLUDED.property_id),
-          raw         = EXCLUDED.raw,
-          updated_at  = now();
-        `,
-        [
-          'huntsville',
-          String(permitNumber),
-          a.PERMIT_TYPE || a.RECORD_TYPE || null,
-          a.DESCRIPTION || a.WORK_DESC || null,
-          a.STATUS || a.RECORD_STATUS || null,
-          a.ISSUED_DATE ?? Date.now(),
-          a.FINALED_DATE ?? null,
-          a.ADDRESS || a.SITE_ADDRESS || null,
-          a.CITY || 'Huntsville',
-          a.ZIP || a.POSTAL_CODE || null,
-          a.PARCEL_ID || a.PARCEL || null,
-          a.CONTRACTOR || a.CONTRACTOR_NAME || null,
-          a.CONTRACTOR_TYPE || null,
-          Number(a.VALUATION || a.JOB_VALUE || 0) || null,
-          lat,
-          lon,
-          is_roofing,
-          is_exterior,
-          propertyId,
-          JSON.stringify(a),
-        ],
-      );
-      inserted += rowCount;
-    }
-
-    if (features.length < pageSize) break;
+    if (features.length < PAGE_SIZE) break;
     offset += features.length;
   }
 
-  log(
-    `Done. scanned=${total}, upserted=${inserted}, roofing=${roofingCount}, window=${sinceDate
-      .toISOString()
-      .slice(0, 10)}..today`,
-  );
-  await pool.end();
+  return { total, totalUpserts, totalRoofing, totalYb };
+}
+
+async function main() {
+  const pool = new Pool(DB);
+  try {
+    const permits = await harvestLayer(pool, 0, 'huntsville', false);
+    log(`PERMITS: scanned=${permits.total} upserted=${permits.totalUpserts} roofing=${permits.totalRoofing}`);
+
+    if (!SKIP_COCS) {
+      const cocs = await harvestLayer(pool, 1, 'huntsville-coc', true);
+      log(`COCS:    scanned=${cocs.total} upserted=${cocs.totalUpserts} yearBuilt_backfilled=${cocs.totalYb}`);
+    }
+  } finally {
+    await pool.end();
+  }
+  log('Done.');
 }
 
 main().catch((e) => {

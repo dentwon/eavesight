@@ -4,7 +4,7 @@
  * loaded _harvest_mj. Retries on deadlock (MRMS concurrent writer).
  */
 const { Pool } = require('pg');
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 
 async function retry(fn, tries=10) {
   for (let i=0;i<tries;i++){

@@ -43,7 +43,7 @@ export class BuildingFootprintsService {
     'IL': 'https://usbuildingdata.blob.core.windows.net/usbuildings-v2/Illinois.geojson.zip',
   };
 
-  private readonly DATA_DIR = '/home/dentwon/StormVault/data/footprints';
+  private readonly DATA_DIR = '/home/dentwon/Eavesight/data/footprints';
 
   constructor(
     private readonly prisma: PrismaService,

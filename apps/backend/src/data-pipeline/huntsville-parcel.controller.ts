@@ -1,7 +1,11 @@
-import { Controller, Get, Post, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { HuntsvilleParcelService, HarvestStats } from './huntsville-parcel.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('harvester')
+@UseGuards(JwtAuthGuard)
+@Throttle({ expensive: { ttl: 60_000, limit: 5 } })
 export class HuntsvilleParcelController {
   constructor(private readonly harvester: HuntsvilleParcelService) {}
 

@@ -4,6 +4,17 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
 import { usePreferencesStore } from '@/stores/preferences';
+import { PLANS, PLAN_ORDER, resolvePlan, type PlanCode } from '@/lib/plans';
+
+interface UsageSnapshot {
+  plan: PlanCode;
+  planName: string;
+  periodStart: string;
+  periodEnd: string;
+  reveals: { used: number; quota: number; remaining: number };
+  roofMeasurements: { used: number; quota: number; remaining: number };
+  overageRevealCents: number | null;
+}
 
 interface UserProfile {
   id: string;
@@ -55,6 +66,31 @@ export default function SettingsPage() {
   const [stormAlerts, setStormAlerts] = useState(true);
   const [leadUpdates, setLeadUpdates] = useState(true);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
+
+  // Billing snapshot
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'billing') return;
+    let cancelled = false;
+    setUsageLoading(true);
+    api
+      .get('/billing/usage')
+      .then((r) => {
+        if (!cancelled) setUsage(r.data);
+      })
+      .catch(() => {
+        // Endpoint may not exist on older backends; show plan-only view.
+        if (!cancelled) setUsage(null);
+      })
+      .finally(() => {
+        if (!cancelled) setUsageLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -322,56 +358,117 @@ export default function SettingsPage() {
       )}
 
       {/* Billing Tab */}
-      {activeTab === 'billing' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Billing & Plan</h2>
+      {activeTab === 'billing' && (() => {
+        const currentPlan = resolvePlan(org?.organization.plan || 'STARTER');
+        const reveals = usage?.reveals;
+        const roofs = usage?.roofMeasurements;
+        const revealsPct = reveals && reveals.quota > 0 ? Math.min(100, Math.round((reveals.used / reveals.quota) * 100)) : 0;
+        const roofsPct = roofs && roofs.quota > 0 ? Math.min(100, Math.round((roofs.used / roofs.quota) * 100)) : 0;
+        return (
+          <div className="bg-card text-foreground rounded-xl border border-border p-6 space-y-6">
+            <h2 className="text-lg font-semibold">Billing &amp; Plan</h2>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-blue-900">Current Plan: {org?.organization.plan || 'STARTER'}</p>
-                <p className="text-xs text-blue-700 mt-1">You&apos;re on the free tier during alpha testing</p>
+                <p className="text-sm font-semibold">Current Plan: {currentPlan.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Stripe checkout is being wired up alongside our cloud migration. Plan changes are tracked manually until then.
+                </p>
               </div>
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-full">ALPHA</span>
+              <span className="px-3 py-1 bg-blue-500/20 text-blue-300 text-xs font-bold rounded-full whitespace-nowrap">BETA</span>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">This billing period</h3>
+              {usageLoading ? (
+                <p className="text-xs text-muted-foreground">Loading usage…</p>
+              ) : reveals && roofs ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-border p-4">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-sm font-medium">Property reveals</p>
+                      <p className="text-xs text-muted-foreground">{reveals.used} of {reveals.quota}</p>
+                    </div>
+                    <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500" style={{ width: `${revealsPct}%` }} />
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {reveals.remaining} remaining. {usage?.overageRevealCents
+                        ? `Overage: $${(usage.overageRevealCents / 100).toFixed(2)} per extra reveal.`
+                        : 'No overage available on this tier — upgrade to keep going.'}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border p-4">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-sm font-medium">Roof measurements</p>
+                      <p className="text-xs text-muted-foreground">{roofs.used} of {roofs.quota}</p>
+                    </div>
+                    <div className="mt-2 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500" style={{ width: `${roofsPct}%` }} />
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">{roofs.remaining} remaining this period.</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Usage data unavailable.</p>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-3">Plans</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {PLAN_ORDER.map((code) => {
+                  const plan = PLANS[code];
+                  const isCurrent = currentPlan.code === plan.code;
+                  return (
+                    <div
+                      key={plan.code}
+                      className={`rounded-xl border-2 p-4 transition-colors flex flex-col ${
+                        isCurrent ? 'border-blue-500 bg-blue-500/5' : plan.highlight ? 'border-emerald-500/60' : 'border-border'
+                      }`}
+                    >
+                      <p className="font-semibold">{plan.name}</p>
+                      <p className="text-xs text-muted-foreground mb-2">{plan.tagline}</p>
+                      <p className="text-2xl font-bold">{plan.priceDisplay}{plan.priceMonthly > 0 ? <span className="text-sm font-normal text-muted-foreground"> / mo</span> : null}</p>
+                      <ul className="mt-3 space-y-1.5 flex-1">
+                        {plan.features.map((f) => (
+                          <li key={f.label} className="text-xs text-muted-foreground flex items-start gap-1.5">
+                            {f.status === 'soon' ? (
+                              <span className="inline-block w-3.5 h-3.5 rounded-full border border-amber-500/60 flex-shrink-0 mt-0.5" />
+                            ) : (
+                              <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                            <span>
+                              {f.label}
+                              {f.status === 'soon' && <span className="ml-1 text-amber-500">(soon)</span>}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <button
+                        className={`mt-4 w-full py-2 rounded-lg text-xs font-medium transition-colors ${
+                          isCurrent
+                            ? 'bg-blue-600 text-white cursor-default'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/70 cursor-not-allowed'
+                        }`}
+                        disabled
+                        title={isCurrent ? 'Your active plan' : 'Stripe checkout will land with our cloud migration'}
+                      >
+                        {isCurrent ? 'Current Plan' : plan.ctaLabel}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Pricing source: <code className="text-foreground">apps/frontend/src/lib/plans.ts</code> — same constant powers the marketing landing page so the two can never drift again.
+              </p>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { name: 'Starter', price: 'Free', features: ['5 leads/month', 'Storm map', 'Basic analytics'], current: true },
-              { name: 'Pro', price: '$49/mo', features: ['Unlimited leads', 'Canvassing lists', 'Lead scoring', 'Property enrichment', 'CSV export'], current: false },
-              { name: 'Team', price: '$149/mo', features: ['Everything in Pro', 'Multi-user', 'Territory management', 'Branded reports', 'API access'], current: false },
-            ].map((plan) => (
-              <div key={plan.name} className={`rounded-xl border-2 p-4 ${
-                plan.current ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200'
-              }`}>
-                <p className="font-semibold text-gray-900">{plan.name}</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{plan.price}</p>
-                <ul className="mt-3 space-y-1.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="text-xs text-gray-600 flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  className={`mt-4 w-full py-2 rounded-lg text-xs font-medium ${
-                    plan.current
-                      ? 'bg-blue-600 text-white cursor-default'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                  disabled={plan.current}
-                >
-                  {plan.current ? 'Current Plan' : 'Coming Soon'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Preferences Tab */}
       {activeTab === 'preferences' && (

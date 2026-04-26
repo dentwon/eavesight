@@ -1,10 +1,12 @@
 import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Prisma } from '@prisma/client';
+import { GoogleOAuthProfile } from './google.strategy';
 
 @Injectable()
 export class AuthService {
@@ -92,7 +94,7 @@ export class AuthService {
       },
     });
 
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -156,6 +158,93 @@ export class AuthService {
         firstName: session.user.firstName,
         lastName: session.user.lastName,
         role: session.user.role,
+      },
+      ...tokens,
+    };
+  }
+
+  /**
+   * OAuth (Google) login. Two paths:
+   *  - existing user with this email → log them in (link Google to that account)
+   *  - no existing user → create a new user + new org, no password set
+   *
+   * Until the schema migration that adds User.googleId, we link purely on email.
+   * After migration, swap the lookup to googleId and fall back to email.
+   */
+  async loginWithGoogleProfile(profile: GoogleOAuthProfile) {
+    if (!profile?.email) {
+      throw new UnauthorizedException('Google account did not return an email');
+    }
+    const email = profile.email.toLowerCase();
+
+    let user = await this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        organizationMemberships: {
+          take: 1,
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    let orgId: string | null;
+
+    if (!user) {
+      // First-time OAuth user — create user + org in one transaction.
+      // Generate an un-knowable random passwordHash placeholder so the
+      // password-login path can never authenticate this account. (After the
+      // schema migration that makes passwordHash nullable, this becomes null.)
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      const passwordHash = await bcrypt.hash(randomPassword, 12);
+
+      const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        const newUser = await tx.user.create({
+          data: {
+            email,
+            passwordHash,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            avatar: profile.avatar,
+            emailVerified: new Date(),
+          },
+        });
+        const org = await tx.organization.create({
+          data: {
+            name: `${profile.firstName || 'New'}'s Roofing`,
+          },
+        });
+        await tx.organizationMember.create({
+          data: {
+            userId: newUser.id,
+            organizationId: org.id,
+            role: 'OWNER',
+          },
+        });
+        return { user: newUser, org };
+      });
+      user = { ...result.user, organizationMemberships: [{ organizationId: result.org.id, role: 'OWNER' as const, id: '', userId: result.user.id, createdAt: new Date() }] } as any;
+      orgId = result.org.id;
+    } else {
+      orgId = user.organizationMemberships?.[0]?.organizationId || null;
+      // Mark email verified now that Google has confirmed it.
+      if (!user.emailVerified) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: new Date() },
+        });
+      }
+    }
+
+    const tokens = await this.generateTokens(user!.id);
+    await this.saveSession(user!.id, tokens.refreshToken);
+    return {
+      user: {
+        id: user!.id,
+        email: user!.email,
+        firstName: user!.firstName,
+        lastName: user!.lastName,
+        role: user!.role,
+        orgId,
       },
       ...tokens,
     };

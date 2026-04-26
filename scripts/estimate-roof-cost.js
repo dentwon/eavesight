@@ -18,9 +18,9 @@
  * Environment:
  *   DB_HOST (default: localhost)
  *   DB_PORT (default: 5433)
- *   DB_NAME (default: stormvault)
- *   DB_USER (default: stormvault)
- *   DB_PASS (default: stormvault)
+ *   DB_NAME (default: eavesight)
+ *   DB_USER (default: eavesight)
+ *   DB_PASS (default: eavesight)
  */
 
 const { Client } = require('pg');
@@ -29,9 +29,9 @@ const { Client } = require('pg');
 const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5433', 10),
-  database: process.env.DB_NAME || 'stormvault',
-  user: process.env.DB_USER || 'stormvault',
-  password: process.env.DB_PASS || 'stormvault',
+  database: process.env.DB_NAME || 'eavesight',
+  user: process.env.DB_USER || 'eavesight',
+  password: process.env.DB_PASS || 'eavesight',
 };
 
 const DEFAULT_PITCH_MULTIPLIER = 1.118; // 6:12 pitch, very common in North AL

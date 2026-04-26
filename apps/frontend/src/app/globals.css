@@ -220,6 +220,43 @@
   animation: rainAway 2.5s linear infinite;
 }
 
+/* Hero map animations — referenced by classes in app/page.tsx (animate-lightning,
+   animate-diamond-flash, animate-pin-hit). Keyframe definitions were missing
+   from the CSS bundle, so the lightning flash, hail-diamond pulses, and
+   storm-pin pop-ins rendered as static elements. */
+
+/* Lightning — full-bleed white scrim that strobes briefly every cycle */
+@keyframes lightning {
+  0%, 87%, 100% { opacity: 0; }
+  88%, 90%      { opacity: 0.7; }
+  89%, 91%      { opacity: 0; }
+  92%, 94%      { opacity: 0.4; }
+  93%           { opacity: 0; }
+}
+.animate-lightning {
+  animation: lightning 6s ease-in-out infinite;
+}
+
+/* Hail diamonds — flash in/out at staggered times via inline animationDelay */
+@keyframes diamond-flash {
+  0%, 70%, 100% { opacity: 0; transform: scale(0.4) rotate(45deg); }
+  20%, 50%      { opacity: 0.85; transform: scale(1) rotate(45deg); }
+}
+.animate-diamond-flash {
+  animation: diamond-flash 2.2s ease-in-out infinite;
+}
+
+/* Storm-damage pins — pop in with an overshoot, then settle and stay visible */
+@keyframes pin-hit {
+  0%   { opacity: 0; transform: scale(0); }
+  60%  { opacity: 1; transform: scale(1.35); }
+  80%  { transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.animate-pin-hit {
+  animation: pin-hit 0.9s ease-out forwards;
+}
+
 /* Water splash ripple - expands outward and fades, getting smaller */
 @keyframes splash {
   0% {

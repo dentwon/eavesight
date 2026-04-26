@@ -17,7 +17,7 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 const { Pool } = require('pg');
 
-const pool = new Pool({ host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault', max:2 });
+const pool = new Pool({ host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight', max:2 });
 
 const OUTPUT_DIR = '/home/dentwon/Eavesight/data';
 const GEOJSON_FILE = OUTPUT_DIR + '/buildings-huntsville.geojson';

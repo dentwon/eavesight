@@ -226,26 +226,32 @@
 │                                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│           Simple, Transparent Pricing                                       │
-│           Start for free, scale as you grow                                 │
+│           One Tool. Whole Pipeline.                                         │
+│           Flat company pricing · Metered reveals · No per-user fees         │
 │                                                                             │
-│  ┌─────────────┐  ┌─────────────────┐  ┌─────────────┐                      │
-│  │   STARTER   │  │ PROFESSIONAL ★  │  │ ENTERPRISE  │                      │
-│  │             │  │                 │  │             │                      │
-│  │Solo Roofers │  │Growing Teams    │  │Large Orgs   │                      │
-│  │             │  │                 │  │             │                      │
-│  │    $49      │  │     $149        │  │    $499     │                      │
-│  │   /month    │  │    /month       │  │   /month    │                      │
-│  │             │  │                 │  │             │                      │
-│  │500 lookups  │  │2,500 lookups    │  │10K lookups  │                      │
-│  │1 user       │  │5 users          │  │Unlimited    │                      │
-│  │1 metro area │  │3 metro areas    │  │Nationwide   │                      │
-│  │Basic data   │  │Full data + API  │  │API + Custom │                      │
-│  │Email support│  │Lead scoring     │  │Dedicated    │                      │
-│  │             │  │Priority support │  │support      │                      │
-│  │[Get Started]│  │[Get Started]    │  │[Contact     │                      │
-│  │             │  │                 │  │ Sales]      │                      │
-│  └─────────────┘  └─────────────────┘  └─────────────┘                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐                      │
+│  │    SCOUT    │  │  BUSINESS   │  │    PRO   ★      │                      │
+│  │             │  │             │  │                 │                      │
+│  │ Try It Free │  │ Solo / Crew │  │ Serious Outbound│                      │
+│  │             │  │             │  │                 │                      │
+│  │    Free     │  │    $99      │  │     $249        │                      │
+│  │             │  │   /month    │  │    /month       │                      │
+│  │             │  │             │  │                 │                      │
+│  │5 reveals/mo │  │50 reveals   │  │200 reveals/mo   │                      │
+│  │County alert │  │Zip alerts   │  │Property alerts  │                      │
+│  │Basic data   │  │1 county map │  │Multi-county     │                      │
+│  │             │  │Name+Mailing │  │Name+Phone+Mail  │                      │
+│  │             │  │5 roof meas. │  │15 roof meas.    │                      │
+│  │             │  │1 route/day  │  │Unlimited routes │                      │
+│  │             │  │             │  │0–100 scoring    │                      │
+│  │[Start Free] │  │[Free Trial] │  │[Free Trial]     │                      │
+│  └─────────────┘  └─────────────┘  └─────────────────┘                      │
+│                                                                             │
+│  ENTERPRISE — Talk to Sales · Unlimited reveals · API · Territory locking   │
+│  Team routing + GPS · 40 roof credits · Priority support                    │
+│                                                                             │
+│  ✓ No per-user fees  ✓ Cancel anytime  ✓ 14-day trial on paid plans         │
+│  ★ Live promo: First 100 users get 3 months free                            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```

@@ -92,11 +92,21 @@ module.exports = {
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'float': 'float 3s ease-in-out infinite',
+        // One-shot curtain used by parent pages to mask the MetroMap theme
+        // remount. 250ms feels snappy on weak mobile GPUs but is long enough
+        // to hide the empty-container flash between unmount and first paint.
+        // `forwards` keeps the 0% opacity after the animation so the scrim
+        // doesn't block clicks after it's faded.
+        'map-wash': 'map-wash 250ms ease-out forwards',
       },
       keyframes: {
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
+        },
+        'map-wash': {
+          '0%':   { opacity: '1' },
+          '100%': { opacity: '0' },
         },
       },
     },

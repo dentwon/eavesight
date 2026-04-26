@@ -5,7 +5,7 @@
  * Census returns: "id","input_address","match_status","match_type","matched_address","coordinates","tiger_line_id","side"
  * coordinates = "-86.54,34.83" (lon,lat)
  * 
- * Run: DB_PASSWORD=stormvault npx ts-node scripts/batch-geocode.ts
+ * Run: DB_PASSWORD=eavesight npx ts-node scripts/batch-geocode.ts
  */
 
 import { Client } from 'pg';
@@ -16,9 +16,9 @@ import * as https from 'https';
 const PG_CONFIG = {
   host: 'localhost',
   port: 5433,
-  database: 'stormvault',
-  user: 'stormvault',
-  password: process.env.DB_PASSWORD || 'stormvault',
+  database: 'eavesight',
+  user: 'eavesight',
+  password: process.env.DB_PASSWORD || 'eavesight',
 };
 
 const BATCH_SIZE = 10000;

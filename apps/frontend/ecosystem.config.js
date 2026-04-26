@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
-    name: 'stormvault-frontend',
-    cwd: '/home/dentwon/StormVault/apps/frontend',
+    name: 'eavesight-frontend',
+    cwd: '/home/dentwon/Eavesight/apps/frontend',
     script: 'npm',
     args: 'start',
     env: {

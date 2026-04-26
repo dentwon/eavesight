@@ -1,4 +1,4 @@
--- StormVault Roofing Cost Database Seed
+-- Eavesight Roofing Cost Database Seed
 -- Regional pricing data for North Alabama (Huntsville/Madison County) market
 -- Sources: Multiple 2025-2026 roofing industry pricing guides
 -- Last updated: 2026-03-28

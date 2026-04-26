@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 StormVault Implementation Demo"
+echo "🚀 Eavesight Implementation Demo"
 echo "=================================="
 echo
 
@@ -14,7 +14,7 @@ echo "2. Demonstrating API functionality..."
 echo "-------------------------------------"
 
 echo "Getting authentication token for demo user:"
-TOKEN=$(curl -s -X POST http://localhost:4000/api/auth/login -H "Content-Type: application/json" -d '{"email":"demo@stormvault.com","password":"demo1234"}' | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
+TOKEN=$(curl -s -X POST http://localhost:4000/api/auth/login -H "Content-Type: application/json" -d '{"email":"demo@eavesight.com","password":"demo1234"}' | grep -o '"accessToken":"[^"]*' | cut -d'"' -f4)
 echo "[Token received - length: ${#TOKEN} characters]"
 echo
 

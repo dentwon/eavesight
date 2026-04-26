@@ -21,9 +21,9 @@ const crypto = require("crypto");
 const DB_CONFIG = {
   host: "localhost",
   port: 5433,
-  user: "stormvault",
-  password: "stormvault",
-  database: "stormvault",
+  user: "eavesight",
+  password: "eavesight",
+  database: "eavesight",
 };
 
 const DEFAULT_INPUT = path.join(

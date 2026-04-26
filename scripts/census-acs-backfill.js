@@ -17,7 +17,7 @@
 const { Pool } = require('pg');
 const https = require('https');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 const ACS_YEAR = 2023;
 const VARS = [
   'B25035_001E', // median year structure built

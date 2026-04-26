@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { StormsService } from './storms.service';
 import { NoaaService } from './noaa.service';
 import { SpcService } from './spc.service';
@@ -49,12 +50,14 @@ export class StormsController {
   // --- Sync Endpoints (manual triggers) ---
 
   @Post('sync/spc')
+  @Throttle({ expensive: { ttl: 60_000, limit: 2 } })
   @ApiOperation({ summary: 'Manually sync today\'s SPC storm reports' })
   syncSpc() {
     return this.spcService.syncToday();
   }
 
   @Post('sync/spc/history')
+  @Throttle({ expensive: { ttl: 60_000, limit: 1 } })
   @ApiOperation({ summary: 'Sync SPC historical data for a date range' })
   syncSpcHistory(@Body() body: { startDate: string; endDate: string }) {
     return this.spcService.syncDateRange(
@@ -64,6 +67,7 @@ export class StormsController {
   }
 
   @Post('sync/noaa')
+  @Throttle({ expensive: { ttl: 60_000, limit: 1 } })
   @ApiOperation({ summary: 'Manually sync NOAA historical storm data' })
   syncNoaa(@Body() body?: { state?: string; years?: number[]; limit?: number }) {
     return this.noaaService.syncStormEvents({

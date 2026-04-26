@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 const CACHE_DIR = '/home/dentwon/.mrms-cache';
 const START_YEAR = parseInt(process.env.START_YEAR || '2015');
 const END_YEAR = parseInt(process.env.END_YEAR || String(new Date().getFullYear()));

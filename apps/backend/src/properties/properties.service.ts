@@ -1,14 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { SearchPropertiesDto } from './dto/search-properties.dto';
 import { LookupPropertyDto } from './dto/lookup-property.dto';
 import { ConfigService } from '@nestjs/config';
+import { estimateRoofAge, roofAgeSuffix } from '../leads/roof-age.util';
+import { RevealMeterService } from './reveal-meter.service';
+
+interface RequestContext {
+  orgId: string | null;
+  userId: string | null;
+}
 
 @Injectable()
 export class PropertiesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly revealMeter: RevealMeterService,
   ) {}
 
   async search(searchDto: SearchPropertiesDto) {
@@ -44,17 +52,34 @@ export class PropertiesService {
       },
     });
 
-    return properties;
+    // Derive roofAge + roofAgeSource from the canonical estimator so callers
+    // (eg. the /dashboard/properties page) never have to do raw subtraction.
+    return properties.map((p) => {
+      const est = estimateRoofAge(p);
+      return {
+        ...p,
+        roofAge: est.age,
+        roofAgeSource: est.source,
+      };
+    });
   }
 
-  async findOne(id: string) {
+  /**
+   * Get a single property. PII (owner phone/email/mailing address) is masked
+   * by default and only included if the caller's org has revealed this
+   * property in the current period (or has quota left to reveal it).
+   *
+   * `includePii=false` returns the masked record without consuming quota.
+   * `includePii=true` checks-and-records a reveal — call this from the
+   * "Reveal contact info" button click on the property panel, NOT from the
+   * generic GET /properties/:id used to render score/year/storm history.
+   */
+  async findOne(id: string, ctx?: RequestContext, includePii: boolean = false) {
     const property = await this.prisma.property.findUnique({
       where: { id },
       include: {
-        propertyStorms: {
-          include: { stormEvent: true },
-        },
-        leads: true,
+        propertyStorms: { include: { stormEvent: true } },
+        leads: ctx?.orgId ? { where: { orgId: ctx.orgId } } : false,
         roofData: true,
         buildingFootprint: true,
         enrichments: true,
@@ -65,7 +90,18 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
-    return property;
+    if (!includePii || !ctx?.orgId || !ctx?.userId) {
+      return this.revealMeter.maskPii(property);
+    }
+
+    const check = await this.revealMeter.checkReveal(ctx.orgId, id, 'reveal');
+    if (!check.allowed) {
+      throw new ForbiddenException(check.reason || 'Reveal quota exhausted');
+    }
+    if (!check.alreadyRevealed) {
+      await this.revealMeter.recordReveal(ctx.orgId, ctx.userId, id, 'reveal');
+    }
+    return { ...property, ownerMasked: false };
   }
 
 
@@ -168,46 +204,59 @@ export class PropertiesService {
       throw new NotFoundException('Property not found');
     }
 
-    const roofData = property.roofData;
-    let estimatedAge: number | null = null;
-    let ageSource = 'unknown';
-
-    if (roofData?.age) {
-      estimatedAge = roofData.age;
-      ageSource = 'roof_record';
-    } else if (property.yearBuilt) {
-      estimatedAge = new Date().getFullYear() - property.yearBuilt;
-      ageSource = 'estimated_from_year_built';
-    }
+    // Route through the canonical estimator -- same ladder used everywhere
+    // else (measured > CoC > permit > yearBuilt mod-22 > unknown, cap 35).
+    const est = estimateRoofAge(property);
 
     return {
       propertyId: property.id,
       address: property.address,
-      roofData: roofData || null,
+      roofData: property.roofData || null,
       buildingFootprint: property.buildingFootprint || null,
-      estimatedAge,
-      ageSource,
+      estimatedAge: est.age,
+      ageSource: est.source,
+      ageSourceDetail: est.sourceDetail,
+      ageDisplaySuffix: roofAgeSuffix(est.source),
       yearBuilt: property.yearBuilt,
-      recommendations: this.getRoofRecommendations(estimatedAge),
+      roofInstalledAt: property.roofInstalledAt,
+      roofInstalledSource: property.roofInstalledSource,
+      recommendations: this.getRoofRecommendations(est.age, est.source),
     };
   }
 
-  private getRoofRecommendations(roofAge: number | null) {
-    if (roofAge === null) {
+  private getRoofRecommendations(
+    roofAge: number | null,
+    source: 'measured' | 'coc' | 'permit' | 'inferred' | 'unknown' = 'unknown',
+  ) {
+    if (roofAge === null || source === 'unknown') {
       return 'No roof age data available. Consider scheduling an inspection.';
     }
 
+    // For "inferred" ages (yearBuilt mod-22) the number is a modelled estimate,
+    // not a measurement, so soften the language accordingly.
+    const hedged = source === 'inferred';
+
     if (roofAge < 10) {
-      return 'Roof appears relatively new. Likely no immediate replacement needed.';
+      return hedged
+        ? 'Roof is likely in early life based on year built. Inspect to confirm.'
+        : 'Roof appears relatively new. Likely no immediate replacement needed.';
     } else if (roofAge < 20) {
-      return 'Roof is approaching mid-life. Monitor for signs of wear.';
+      return hedged
+        ? 'Modeled estimate suggests mid-life roof. Inspection recommended to verify.'
+        : 'Roof is approaching mid-life. Monitor for signs of wear.';
     } else if (roofAge < 25) {
-      return 'Roof is at typical lifespan end. Consider inspection and replacement.';
+      return hedged
+        ? 'Modeled estimate suggests end-of-life roof. Inspection strongly recommended.'
+        : 'Roof is at typical lifespan end. Consider inspection and replacement.';
     } else {
-      return 'Roof is past typical lifespan. Replacement likely needed.';
+      return hedged
+        ? 'Modeled estimate suggests past lifespan. Inspection recommended before outreach.'
+        : 'Roof is past typical lifespan. Replacement likely needed.';
     }
   }
 
+  // Bulk viewport endpoint — NEVER returns owner PII (phone/email/mailing
+  // address). Reveal-meter requires per-property opt-in via findOne(includePii=true).
   async getPropertiesInBounds(
     north: number,
     south: number,
@@ -229,14 +278,11 @@ export class PropertiesService {
         city: true,
         state: true,
         zip: true,
-        ownerFullName: true,
         assessedValue: true,
         marketValue: true,
         yearBuilt: true,
         propertyType: true,
         onDncList: true,
-        ownerPhone: true,
-        ownerEmail: true,
         roofData: {
           select: {
             totalAreaSqft: true,
@@ -257,6 +303,8 @@ export class PropertiesService {
     return properties;
   }
 
+  // Viewport endpoint for the map. Returns NO owner-contact PII; reveal is
+  // a separate metered call via findOne(includePii=true).
   async findInBounds(north: number, south: number, east: number, west: number, limit: number = 5000, includeGeometry: boolean = false) {
     // Try Property table first (has lat/lon), fall back to MadisonParcelData
     const propertyCount = await this.prisma.property.count();
@@ -272,7 +320,6 @@ export class PropertiesService {
           lat: true,
           lon: true,
           address: true,
-          ownerFullName: true,
           assessedValue: true,
           marketValue: true,
           yearBuilt: true,
@@ -288,7 +335,8 @@ export class PropertiesService {
       });
     }
 
-    // Fall back to MadisonParcelData (no lat/lon but has address search)
+    // Fall back to MadisonParcelData (no lat/lon but has address search).
+    // ownerName intentionally NOT returned in the bulk path.
     const parcels = await this.prisma.madisonParcelData.findMany({
       take: limit,
       orderBy: { pin: 'asc' },
@@ -300,11 +348,9 @@ export class PropertiesService {
       lat: null,
       lon: null,
       address: p.propertyAddress,
-      ownerFullName: p.propertyOwner,
       // totalAppraisedValue is the real market value; totalAssessedValue is 10% of that for tax purposes.
       assessedValue: p.totalAssessedValue,
       marketValue: p.totalAppraisedValue,
-      parcel: p,
     }));
   }
 

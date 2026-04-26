@@ -14,13 +14,13 @@
 const { Pool } = require('pg');
 const https = require('https');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 const BATCH = 100;
 const NOMINATIM_DELAY_MS = 1100;
 
 function fetchJson(url, headers={}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 30000, rejectUnauthorized: false, headers: { 'User-Agent': 'StormVault/1.0 (dentwon@gmail.com)', 'Accept': 'application/json', ...headers } }, res => {
+    const req = https.get(url, { timeout: 30000, rejectUnauthorized: false, headers: { 'User-Agent': 'Eavesight/1.0 (dentwon@gmail.com)', 'Accept': 'application/json', ...headers } }, res => {
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP '+res.statusCode)); }
       let d=''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e){ reject(new Error('bad json: '+d.slice(0,120))); }});
     });
@@ -86,7 +86,7 @@ async function main() {
               address = COALESCE(NULLIF($2,''), address),
               city = COALESCE(NULLIF($3,''), city),
               zip = COALESCE(NULLIF($4,''), zip),
-              source = COALESCE(source, '') || '+nominatim-reverse'
+              source = CASE WHEN COALESCE(source, '') ILIKE '%+nominatim-reverse%' THEN source ELSE COALESCE(source, '') || '+nominatim-reverse' END
              WHERE id = $1 AND address LIKE 'ms-%'`,
             [p.id, r.address || '', r.city || '', r.zip || '']
           );

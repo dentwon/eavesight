@@ -20,9 +20,9 @@ const https = require('https');
 const DB_CONFIG = {
   host: 'localhost',
   port: 5433,
-  user: 'stormvault',
-  password: 'stormvault',
-  database: 'stormvault',
+  user: 'eavesight',
+  password: 'eavesight',
+  database: 'eavesight',
 };
 
 const BASE_URL = 'https://madisonproperty.countygovservices.com/Property/Property/Details';

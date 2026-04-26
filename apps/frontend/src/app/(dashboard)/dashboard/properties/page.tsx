@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth';
+import { roofAgeSuffix, type RoofAgeSource } from '@/lib/roofAgeEstimate';
 
 interface Property {
   id: string;
@@ -14,7 +15,10 @@ interface Property {
   lat?: number;
   lon?: number;
   yearBuilt?: number | null;
-  roofAge?: number;
+  roofAge?: number | null;
+  roofAgeSource?: RoofAgeSource;
+  roofInstalledAt?: string | null;
+  roofInstalledSource?: string | null;
   roofYear?: number;
   ownerFullName?: string | null;
   ownerPhone?: string | null;
@@ -56,11 +60,6 @@ export default function PropertiesPage() {
     if (age < 10) return 'bg-green-100 text-green-800';
     if (age < 20) return 'bg-yellow-100 text-yellow-800';
     return 'bg-red-100 text-red-800';
-  };
-
-  const estimateRoofAge = (yearBuilt: number | undefined) => {
-    if (!yearBuilt) return null;
-    return new Date().getFullYear() - yearBuilt;
   };
 
   return (
@@ -119,9 +118,12 @@ export default function PropertiesPage() {
                     <h3 className="font-medium text-gray-900">{property.address}</h3>
                     <p className="text-sm text-gray-500">{property.city}, {property.state} {property.zip}</p>
                   </div>
-                  {property.roofAge && (
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getRoofAgeColor(property.roofAge)}`}>
-                      {property.roofAge} yrs
+                  {property.roofAge != null && (
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${getRoofAgeColor(property.roofAge)}`}
+                      title={property.roofAgeSource === 'inferred' ? 'Estimated from year built' : undefined}
+                    >
+                      {property.roofAge} yrs{roofAgeSuffix(property.roofAgeSource ?? 'unknown')}
                     </span>
                   )}
                 </div>
@@ -133,7 +135,7 @@ export default function PropertiesPage() {
                   </div>
                   <div>
                     <p className="text-gray-500">Roof Age</p>
-                    <p className="font-medium">{property.roofAge ? `${property.roofAge} years` : 'Unknown'}</p>
+                    <p className="font-medium">{property.roofAge != null ? `${property.roofAge} years${roofAgeSuffix(property.roofAgeSource ?? 'unknown')}` : 'Unknown'}</p>
                   </div>
                 </div>
 
@@ -188,8 +190,19 @@ export default function PropertiesPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Roof Age</h3>
-                  <p className="font-medium">{selectedProperty.roofAge ? `${selectedProperty.roofAge} years` : 'Unknown'}</p>
-                  <p className="text-xs text-gray-500">Estimated from year built</p>
+                  <p className="font-medium">
+                    {selectedProperty.roofAge != null
+                      ? `${selectedProperty.roofAge} years${roofAgeSuffix(selectedProperty.roofAgeSource ?? 'unknown')}`
+                      : 'Unknown'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {selectedProperty.roofAgeSource === 'measured' && 'Measured roof age'}
+                    {selectedProperty.roofAgeSource === 'coc' && 'From Certificate of Occupancy'}
+                    {selectedProperty.roofAgeSource === 'permit' && 'From building permit'}
+                    {selectedProperty.roofAgeSource === 'inferred' && 'Estimated from year built (22-yr cycle)'}
+                    {(!selectedProperty.roofAgeSource || selectedProperty.roofAgeSource === 'unknown') &&
+                      'No roof age data available'}
+                  </p>
                 </div>
               </div>
 
@@ -221,17 +234,22 @@ export default function PropertiesPage() {
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-2">Roof Recommendation</h3>
                 <div className={`rounded-lg p-4 ${
-                  (selectedProperty.roofAge || 0) < 10 ? 'bg-green-50 text-green-800' :
-                  (selectedProperty.roofAge || 0) < 20 ? 'bg-yellow-50 text-yellow-800' :
-                  'bg-red-50 text-red-800'
+                  selectedProperty.roofAge == null || selectedProperty.roofAgeSource === 'unknown'
+                    ? 'bg-gray-50 text-gray-700'
+                    : selectedProperty.roofAge < 10 ? 'bg-green-50 text-green-800'
+                    : selectedProperty.roofAge < 20 ? 'bg-yellow-50 text-yellow-800'
+                    : 'bg-red-50 text-red-800'
                 }`}>
-                  {selectedProperty.roofAge && selectedProperty.roofAge < 10 && (
+                  {(selectedProperty.roofAge == null || selectedProperty.roofAgeSource === 'unknown') && (
+                    <p>No roof age data available. Consider scheduling an inspection to gather baseline data.</p>
+                  )}
+                  {selectedProperty.roofAge != null && selectedProperty.roofAge < 10 && (
                     <p>Roof appears relatively new. Likely no immediate replacement needed.</p>
                   )}
-                  {selectedProperty.roofAge && selectedProperty.roofAge >= 10 && selectedProperty.roofAge < 20 && (
+                  {selectedProperty.roofAge != null && selectedProperty.roofAge >= 10 && selectedProperty.roofAge < 20 && (
                     <p>Roof is approaching mid-life. Monitor for signs of wear and consider scheduling an inspection.</p>
                   )}
-                  {(!selectedProperty.roofAge || selectedProperty.roofAge >= 20) && (
+                  {selectedProperty.roofAge != null && selectedProperty.roofAge >= 20 && (
                     <p>Roof is at or past typical lifespan. Replacement likely needed - high priority for outreach.</p>
                   )}
                 </div>

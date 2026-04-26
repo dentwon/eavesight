@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Body, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Body, Inject, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { KcsParcelService } from './kcs-parcel.service';
 import { PrismaService } from '../common/prisma.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 interface BatchResult {
   success: boolean;
@@ -25,6 +27,8 @@ interface HarvestStats {
 }
 
 @Controller('harvester')
+@UseGuards(JwtAuthGuard)
+@Throttle({ expensive: { ttl: 60_000, limit: 5 } })
 export class KcsParcelController {
   private harvestStats: HarvestStats = {
     totalProcessed: 0,

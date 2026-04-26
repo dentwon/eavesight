@@ -5,6 +5,7 @@ import { SolarService } from './solar.service';
 import { RentCastService } from './rentcast.service';
 import { TracerfyService } from './tracerfy.service';
 import { GeocodingService } from './geocoding.service';
+import { RevealMeterService } from './reveal-meter.service';
 import { DataPipelineModule } from '../data-pipeline/data-pipeline.module';
 
 @Module({
@@ -16,6 +17,7 @@ import { DataPipelineModule } from '../data-pipeline/data-pipeline.module';
     RentCastService,
     TracerfyService,
     GeocodingService,
+    RevealMeterService,
   ],
   exports: [
     PropertiesService,
@@ -23,6 +25,7 @@ import { DataPipelineModule } from '../data-pipeline/data-pipeline.module';
     RentCastService,
     TracerfyService,
     GeocodingService,
+    RevealMeterService,
   ],
 })
 export class PropertiesModule {}

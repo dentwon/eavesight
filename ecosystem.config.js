@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'eavesight-backend',
-      cwd: '/home/dentwon/StormVault/apps/backend',
+      cwd: '/home/dentwon/Eavesight/apps/backend',
       script: 'dist/main.js',
       instances: 1,
       autorestart: true,
@@ -15,7 +15,7 @@ module.exports = {
     },
     {
       name: 'eavesight-frontend',
-      cwd: '/home/dentwon/StormVault/apps/frontend',
+      cwd: '/home/dentwon/Eavesight/apps/frontend',
       script: '../../node_modules/.bin/next',
       args: 'start -p 3000 -H 0.0.0.0',
       instances: 1,

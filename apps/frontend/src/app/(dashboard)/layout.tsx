@@ -18,7 +18,7 @@ import {
   Plus,
   MoreHorizontal,
 } from 'lucide-react';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore, useAuthHasHydrated } from '@/stores/auth';
 import { usePreferencesStore } from '@/stores/preferences';
 import { Logo } from '@/components/Logo';
 import { LiveAlertBanner } from '@/components/LiveAlertBanner';
@@ -63,6 +63,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuthStore();
+  // Zustand persist is async in Next.js 14 App Router — first render sees
+  // the default (isAuthenticated=false) before localStorage hits the store.
+  // Gating the redirect on hydration is what keeps logged-in users from
+  // bouncing back to /login on every hard refresh or PM2 reload.
+  const authHydrated = useAuthHasHydrated();
   const sidebarExpanded = usePreferencesStore((s) => s.sidebarExpanded);
   const setSidebarExpanded = usePreferencesStore((s) => s.setSidebarExpanded);
   const appTheme = usePreferencesStore((s) => s.appTheme);
@@ -75,8 +80,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const alertCount = activeAlerts.length;
 
   useEffect(() => {
+    // Wait for the persisted auth state to land before deciding anything —
+    // otherwise we'd redirect a logged-in user to /login on the first render
+    // and only realize our mistake after the localStorage read resolved.
+    if (!authHydrated) return;
     if (!isAuthenticated) router.push('/login');
-  }, [isAuthenticated, router]);
+  }, [authHydrated, isAuthenticated, router]);
 
   const handleLogout = () => {
     logout();
@@ -95,7 +104,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  if (!isAuthenticated) return null;
+  // Render nothing until hydration completes — otherwise the first paint
+  // shows the sidebar, then flickers to /login as the useEffect above fires.
+  // Once hydrated, show the dashboard if authenticated; otherwise let the
+  // useEffect redirect take over and render nothing in the meantime.
+  if (!authHydrated || !isAuthenticated) return null;
 
   const isActive = (href: string) =>
     href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href);

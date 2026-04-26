@@ -83,7 +83,20 @@ function estimateRoofAgeFromValueRatio(
   return null;
 }
 
-function estimateRoofAge(appraisedValue: number, buildingValue: number): number | null {
+/**
+ * Prospect-table shortcut: rough roof age from appraised/building-value ratio
+ * when the parcel is not yet promoted to a full Property record (and therefore
+ * has no yearBuilt / roofInstalledAt anchor yet). Purely heuristic -- label
+ * output as "est" everywhere it shows up.
+ *
+ * Deliberately named differently from the canonical `estimateRoofAge` in
+ * `@/lib/roofAgeEstimate` (which takes a PropertyInput shape) so IDE
+ * auto-import never picks the wrong one.
+ */
+function estimateProspectRoofAge(
+  appraisedValue: number,
+  buildingValue: number,
+): number | null {
   const r = estimateRoofAgeFromValueRatio(appraisedValue, buildingValue);
   return r ? r.years : null;
 }
@@ -147,7 +160,7 @@ function ParcelCard({
 }) {
   const score = calcLeadScore(parcel);
   const badge = getScoreBadge(score);
-  const roofAge = estimateRoofAge(parcel.totalAppraisedValue, parcel.totalBuildingValue);
+  const roofAge = estimateProspectRoofAge(parcel.totalAppraisedValue, parcel.totalBuildingValue);
   const isAlreadyLead = !!parcel.lead;
 
   return (
@@ -226,7 +239,7 @@ function ParcelDetail({
 }) {
   const score = calcLeadScore(parcel);
   const badge = getScoreBadge(score);
-  const roofAge = estimateRoofAge(parcel.totalAppraisedValue, parcel.totalBuildingValue);
+  const roofAge = estimateProspectRoofAge(parcel.totalAppraisedValue, parcel.totalBuildingValue);
   const buildingToLand =
     parcel.totalAppraisedValue > 0
       ? ((parcel.totalBuildingValue / parcel.totalAppraisedValue) * 100).toFixed(0)

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { estimateRoofAge, roofAgeConfidenceMultiplier } from './roof-age.util';
 
 @Injectable()
 export class LeadScoringService {
@@ -75,22 +76,33 @@ export class LeadScoringService {
   private scoreRoofAge(property: any): number {
     if (!property) return 5;
 
-    let roofAge: number | null = null;
+    const { age, source } = estimateRoofAge(property);
 
-    if (property.roofData?.age) {
-      roofAge = property.roofData.age;
-    } else if (property.yearBuilt) {
-      roofAge = new Date().getFullYear() - property.yearBuilt;
-    }
+    // No data at all: fall back to the historical default so we don't
+    // zero out the property's score for a missing field.
+    if (age == null) return 8;
 
-    if (!roofAge) return 8;
+    // Bucket the measured age the same way as before. These buckets are
+    // tuned to roofer-facing signal: 25+yrs = "almost certainly needs
+    // replacement", 20-24 = "ready", etc.
+    const measuredPoints =
+      age >= 25 ? 25 :
+      age >= 20 ? 21 :
+      age >= 15 ? 17 :
+      age >= 10 ? 10 :
+      age >= 5  ?  5 :
+                   2;
 
-    if (roofAge >= 25) return 25;
-    if (roofAge >= 20) return 21;
-    if (roofAge >= 15) return 17;
-    if (roofAge >= 10) return 10;
-    if (roofAge >= 5) return 5;
-    return 2;
+    // Graduated uncertainty discount keyed on source provenance.
+    //   measured = 1.00  (roof-imagery analysis or direct report)
+    //   coc      = 0.95  (certificate-of-occupancy new-construction date)
+    //   permit   = 0.85  (reroof permit -- strong but not always specific)
+    //   inferred = 0.70  (mod-life heuristic over yearBuilt)
+    //   unknown  = 0.00  (no usable signal -- handled by age==null above)
+    // Keeps the old 30% discount for inferred while giving COC-anchored
+    // installs nearly full credit (they are near-perfect ground truth).
+    const multiplier = roofAgeConfidenceMultiplier(source);
+    return Math.round(measuredPoints * multiplier);
   }
 
   // Max 20 pts - best severity from recent storms

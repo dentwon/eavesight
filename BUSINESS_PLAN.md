@@ -27,19 +27,25 @@ Eavesight is an integrated B2B SaaS platform that gives roofing contractors a si
 
 ### Business Model
 
-**Subscription SaaS** with tiered pricing:
-- **Starter**: $99/month - 1 user, 1 metro area, 100 leads/month
-- **Professional**: $299/month - 5 users, 3 metro areas, unlimited leads
-- **Enterprise**: $799/month - Unlimited users, nationwide, API access
+**Subscription SaaS with metered property reveals, no per-user fees:**
 
-### Funding Requirement
+- **Scout**: Free — 5 property reveals/month, county-wide storm alerts, basic property data (try before you buy)
+- **Business**: $99/month — 50 reveals/month, zip-code storm alerts, Hot/Warm/Cold lead tiers, 1 county map, 1 canvassing route/day, 5 roof-measurement credits (solo roofers / small crews)
+- **Pro**: $249/month — 200 reveals/month, property-level push alerts, full 0-100 lead scoring, multi-county access, unlimited canvassing routes, owner name/phone/mailing address, 15 roof-measurement credits (serious outbound)
+- **Enterprise**: Talk to Sales — unlimited reveals, custom scoring, API access, territory locking, team routing + GPS, 40 roof-measurement credits, priority support (multi-crew ops)
 
-**$100 initial investment** allocated to:
-- Domain and basic hosting: $20
-- Premium API credits (NOAA, property data): $50
-- Design assets and branding: $30
+All paid plans: 14-day free trial, no contract, cancel anytime. Launch promo: **first 100 users get 3 months free** (currently live on landing page).
 
-**Expected Timeline to Revenue**: 8-12 weeks to functional MVP
+### Current Status (April 2026)
+
+The MVP is live and in closed beta. Data loaded:
+- 242,987 properties (Madison, Limestone, Morgan, Marshall, Jackson counties)
+- 2.1M historical storm events (SPC, 1950-present, nationwide)
+- 6.6M property↔storm associations
+- 243K Microsoft building footprints
+- 174K raw Huntsville parcels, 30K Huntsville building permits
+
+Next revenue milestone: convert beta users to paid Business/Pro tier and stand up the second metro (Nashville).
 
 ---
 
@@ -89,13 +95,14 @@ Eavesight integrates ALL data sources into ONE platform at a price point 60-80% 
 
 ### Geographic Focus
 
-**Initial Launch**: Dallas-Fort Worth Metroplex
-- High storm frequency
-- Large roofer population
-- Varied property types
-- Strong word-of-mouth potential
+**Initial Launch**: Huntsville / North Alabama
+- Marketed coverage: Madison, Limestone, and Morgan counties (Huntsville, Athens, Decatur)
+- High storm frequency (Dixie Alley tornado + hail corridor)
+- Home market; full parcel + owner + permit data already loaded
+- Adjacent county data (Marshall, Jackson) also ingested and ready when demand warrants
+- Storm-event data covers the entire United States; only *property* coverage is metro-gated
 
-**Expansion**: Phoenix, Denver, Oklahoma City, Minneapolis
+**Expansion**: Nashville (next), then broader Southeast storm belt.
 
 ---
 
@@ -156,27 +163,26 @@ Eavesight integrates ALL data sources into ONE platform at a price point 60-80% 
 
 ### Launch Timeline
 
-**Week 1-4: Preparation**
-- Finalize MVP feature scope
-- Set up infrastructure
-- Design brand identity
-- Create onboarding flow
+MVP is live (closed beta as of April 2026). Remaining sequence:
 
-**Week 5-8: Development**
-- Build core mapping functionality
-- Integrate storm data APIs
-- Implement lead management
-- Deploy to staging
+**Now: Closed beta**
+- Recruit 10-20 Huntsville-area roofers (free via "first 100 users get 3 months free" landing-page offer)
+- Finish filling the biggest data gaps (owner phone/email via skip-trace, roof anchors, permit is_roofing classifier) — see DATA_AUDIT_GAP_ANALYSIS.md
+- Wire Stripe billing + quota enforcement before ending free trials
 
-**Week 9-10: Beta Launch**
-- Recruit 10 beta customers (free in exchange for feedback)
-- Iterate based on user feedback
-- Refine pricing based on value perception
+**+30 days: Paid conversion**
+- Convert first-cohort beta users to Business / Pro
+- Begin content marketing (blog, YouTube)
+- Start referral incentive (1 month free for a successful referral)
 
-**Week 11-12: Paid Launch**
-- Convert beta users to paid (target: 5/10 conversion)
-- Launch marketing campaigns
-- Begin content marketing
+**+60-90 days: Second-metro readiness**
+- Ingest Nashville parcels (Davidson / Williamson / Rutherford / Sumner / Wilson CAD)
+- Register Nashville `Metro` record, run pin-card + hex aggregation
+- Open Nashville waitlist on landing page
+
+**+90-120 days: Nashville launch**
+- Paid acquisition in Nashville metro
+- Enterprise pilot conversations with multi-crew operations
 
 ### Acquisition Channels
 
@@ -201,12 +207,15 @@ Eavesight integrates ALL data sources into ONE platform at a price point 60-80% 
 
 ### Pricing Strategy
 
-**Penetration Pricing for Launch**:
-- Starter: $49/month (normally $99) - Limited time offer
-- Professional: $149/month (normally $299) - First year pricing
-- Enterprise: $499/month (normally $799) - First year pricing
+**Live pricing (see landing page):**
+- **Scout — Free** (5 reveals/mo; funnel opener, drives signups without friction)
+- **Business — $99/mo** (50 reveals/mo; solo roofers + small crews)
+- **Pro — $249/mo** (200 reveals/mo; serious outbound teams — *featured, "most popular"*)
+- **Enterprise — Custom** (unlimited reveals + API + territory locking)
 
-**Rationale**: Capture market share from expensive competitors by offering 60-80% lower price with equal or better functionality.
+**Launch promo:** First 100 users get 3 months free on any paid plan.
+
+**Rationale:** Flat company pricing (no per-user fees) removes the "how many seats do I need?" objection. Metered property reveals make the value obvious — each reveal unlocks the full owner + contact + storm + roof profile for one address, which is the unit of work a roofer actually consumes. Pro at $249 is anchored against the plan's "1 closed job = 56× monthly cost" math. Still priced materially below HailTrace ($500+) / Telefi ($300+) / AccuLynx ($400+).
 
 ---
 
@@ -214,40 +223,66 @@ Eavesight integrates ALL data sources into ONE platform at a price point 60-80% 
 
 ### 12-Month Forecast
 
-| Month | Users | MRR | Notes |
-|-------|-------|-----|-------|
-| 1 | 5 | $245 | Beta converts |
-| 2 | 12 | $588 | Paid launch |
-| 3 | 25 | $1,225 | Word of mouth |
-| 4 | 40 | $1,960 | Marketing kicks in |
-| 5 | 60 | $2,940 | Referral program |
-| 6 | 85 | $4,165 | Content marketing |
-| 7 | 110 | $5,390 | Partnership deals |
-| 8 | 140 | $6,860 | Scale advertising |
-| 9 | 175 | $8,575 | Enterprise pilots |
-| 10 | 210 | $10,290 | National expansion |
-| 11 | 250 | $12,250 | Product iterations |
-| 12 | 300 | $14,700 | Full national launch |
+**Assumptions**
 
-**Year 1 Target**: 300 customers, $176,400 ARR
+- **Paid tier mix** (of paying customers): 60% Business @ $99, 35% Pro @ $249, 5% Enterprise @ ~$500 avg → blended paid ARPU **~$175/mo**.
+- **Total-base mix**: ~30% stay on Scout (free). Paying users = ~70% of total signups once the base stabilizes, lower early as promo trials absorb.
+- **Launch promo**: "first 100 users get 3 months free" means months 1-3 produce ~zero paid revenue — the first cohorts graduate to paid in month 4.
+- **Churn**: assume 4% monthly on paid in year 1 (embedded in paying-user counts).
+- **Nashville**: ingest Q3, open waitlist, launch month 10 → second-metro boost late Q4.
+
+| Month | Total signups | Paying users | Blended paid ARPU | MRR | Notes |
+|-------|---|---|---|---|-------|
+| 1 | 10 | 0 | — | $0 | Closed beta; Huntsville cohort on promo |
+| 2 | 25 | 0 | — | $0 | Organic + local outreach; promo absorbing |
+| 3 | 50 | 0 | — | $0 | Content/SEO indexing; first conversions queued |
+| 4 | 75 | 8 | $170 | $1,360 | First promo grads convert to paid |
+| 5 | 105 | 20 | $172 | $3,440 | Referral program activates |
+| 6 | 145 | 38 | $174 | $6,612 | Partnerships (suppliers / NRCA) warm up |
+| 7 | 190 | 60 | $175 | $10,500 | Paid ads scale; content ranking |
+| 8 | 240 | 85 | $176 | $14,960 | First Enterprise pilot |
+| 9 | 290 | 115 | $177 | $20,355 | Inbound from SEO matures |
+| 10 | 355 | 150 | $178 | $26,700 | **Nashville launch** (new-metro promo) |
+| 11 | 420 | 190 | $178 | $33,820 | Nashville promo conversions |
+| 12 | 500 | 235 | $180 | $42,300 | Year-end; multi-metro scale |
+
+**Year 1 Target**: ~500 total signups, ~235 paying customers, **~$42K exit MRR ≈ $500K run-rate ARR**. Year-1 booked revenue is materially lower (~$170K) because the first three months yield near-zero MRR and ramp is back-loaded.
 
 ### 3-Year Projection
 
-| Year | Customers | ARR |
-|------|-----------|-----|
-| Year 1 | 300 | $176K |
-| Year 2 | 1,200 | $720K |
-| Year 3 | 3,500 | $2.1M |
+| Year | Total signups | Paying | Exit MRR | ARR run-rate | Notes |
+|------|---|---|---|---|---|
+| Year 1 | 500 | 235 | $42K | **~$500K** | Huntsville + Nashville launch |
+| Year 2 | 2,000 | ~1,050 | $195K | **~$2.3M** | Add Birmingham, Atlanta, Austin; Enterprise book grows |
+| Year 3 | 5,000 | ~2,800 | $560K | **~$6.7M** | 8-12 metros live; Enterprise mix climbs to ~15% of revenue |
 
-### Cost Structure (Year 1)
+### Cost Structure
 
-| Category | Monthly | Annual |
-|----------|---------|--------|
-| Hosting | $100 | $1,200 |
-| APIs | $300 | $3,600 |
-| Marketing | $500 | $6,000 |
-| Tools/Subscriptions | $100 | $1,200 |
-| **Total** | **$1,000** | **$12,000** |
+Costs scale with the user base; launch-phase run-rate differs materially from year-end.
+
+**Launch phase (Months 1-6)**
+
+| Category | Monthly | Notes |
+|----------|---------|-------|
+| Hosting (Postgres, Redis, Vercel, CDN) | $150 | Managed DB is the biggest line |
+| Data APIs (SPC, Census, skip-trace pilot) | $400 | Skip-trace metered per reveal |
+| Roof measurement credits (Roofr/EagleView) | $300 | Metered, ~$3-6 per measurement |
+| Marketing (ads, content, conferences) | $1,000 | Ramps with spend appetite |
+| Tooling (Stripe, Twilio, Resend, Sentry) | $200 | |
+| **Total** | **~$2,050** | |
+
+**Year-end run-rate (Month 12)**
+
+| Category | Monthly | Notes |
+|----------|---------|-------|
+| Hosting | $500 | Dedicated Postgres, Redis cluster, CDN |
+| Data APIs + skip trace | $2,000 | Scales with reveals; ~60% gross margin after pass-through |
+| Roof measurement credits | $1,500 | Pro/Enterprise volume |
+| Marketing | $5,000 | Paid search + programmatic + events |
+| Tooling | $500 | |
+| **Total** | **~$9,500** | |
+
+Annualized year-1 opex ≈ **~$65K** blended (ramping from $2K → $9.5K across the year); against Year-1 booked revenue of ~$170K, contribution margin is positive from Q2.
 
 ---
 

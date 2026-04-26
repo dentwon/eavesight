@@ -11,8 +11,8 @@ Needs: shapely, psycopg2-binary
 import json, sys, os
 from pathlib import Path
 
-NDJSON = "/home/dentwon/StormVault/output/north_alabama.ndjson"
-DB = "postgresql://stormvault:stormvault@localhost:5433/stormvault"
+NDJSON = "/home/dentwon/Eavesight/output/north_alabama.ndjson"
+DB = "postgresql://eavesight:eavesight@localhost:5433/eavesight"
 BATCH = 5000
 
 def log(msg):

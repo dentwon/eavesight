@@ -1,0 +1,273 @@
+diff --git a/apps/backend/prisma/schema.prisma b/apps/backend/prisma/schema.prisma
+index 505edf7..b84f498 100644
+--- a/apps/backend/prisma/schema.prisma
++++ b/apps/backend/prisma/schema.prisma
+@@ -1,4 +1,4 @@
+-// StormVault Prisma Schema
++// Eavesight Prisma Schema
+ 
+ generator client {
+   provider        = "prisma-client-js"
+@@ -13,7 +13,8 @@ datasource db {
+ model User {
+   id            String    @id @default(cuid())
+   email         String    @unique
+-  passwordHash  String
++  passwordHash  String?
++  googleId      String?   @unique
+   firstName     String?
+   lastName      String?
+   role          UserRole  @default(USER)
+@@ -28,6 +29,7 @@ model User {
+   sessions                Session[]
+   activities              Activity[]
+   canvassSessions         CanvassSession[]
++  propertyReveals         PropertyReveal[]
+ 
+   @@map("users")
+ }
+@@ -51,38 +53,60 @@ model Session {
+ }
+ 
+ model Organization {
+-  id               String    @id @default(cuid())
+-  name             String
+-  plan             Plan      @default(STARTER)
+-  logo             String?
+-  website          String?
+-  phone            String?
+-  address          String?
+-  city             String?
+-  state            String?
+-  zip              String?
+-  stripeCustomerId String?
+-  trialEndsAt      DateTime?
+-  createdAt        DateTime  @default(now())
+-  updatedAt        DateTime  @updatedAt
+-
+-  members     OrganizationMember[]
+-  leads       Lead[]
+-  apiKeys     ApiKey[]
+-  territories Territory[]
+-  campaigns   Campaign[]
+-  apiUsage    ApiUsage[]
+-  apiQuotas   ApiQuota[]
++  id   String @id @default(cuid())
++  name String
++  plan Plan   @default(SCOUT)
++
++  logo    String?
++  website String?
++  phone   String?
++  address String?
++  city    String?
++  state   String?
++  zip     String?
++
++  // Subscription / billing period — populated by Stripe later, defaulted locally for now
++  stripeCustomerId     String?
++  stripeSubscriptionId String?
++  subscriptionStatus   SubscriptionStatus @default(NONE)
++  trialEndsAt          DateTime?
++  currentPeriodStart   DateTime           @default(now())
++  currentPeriodEnd     DateTime?
++
++  // Per-period usage counters (reset when period rolls)
++  revealsUsedThisPeriod          Int @default(0)
++  roofMeasurementsUsedThisPeriod Int @default(0)
++
++  createdAt DateTime @default(now())
++  updatedAt DateTime @updatedAt
++
++  members         OrganizationMember[]
++  leads           Lead[]
++  apiKeys         ApiKey[]
++  territories     Territory[]
++  campaigns       Campaign[]
++  apiUsage        ApiUsage[]
++  apiQuotas       ApiQuota[]
++  propertyReveals PropertyReveal[]
+ 
+   @@map("organizations")
+ }
+ 
+ enum Plan {
+-  STARTER
+-  PROFESSIONAL
++  SCOUT
++  BUSINESS
++  PRO
+   ENTERPRISE
+ }
+ 
++enum SubscriptionStatus {
++  NONE
++  TRIALING
++  ACTIVE
++  PAST_DUE
++  CANCELED
++}
++
+ model OrganizationMember {
+   id             String        @id @default(cuid())
+   organizationId String
+@@ -136,6 +160,11 @@ model Property {
+   yearBuilt           Int?
+   yearBuiltConfidence DataConfidence @default(NONE)
+   yearBuiltSource     String? // human-readable source tag (e.g. "census-acs-b25035")
++  // Roof-install anchor -- preferred input to roof-age estimator when present.
++  // Populated from CoC new-construction ("coc-new-construction") or future
++  // trade-permit reroofs. If null, estimator falls back to yearBuilt heuristic.
++  roofInstalledAt     DateTime?
++  roofInstalledSource String? // e.g. "coc-new-construction", "permit-reroof", "manual"
+   roofAreaSqft        Float? // denormalized from BuildingFootprint.areaSqft
+   roofSizeClass       String? // RESIDENTIAL | LARGE_RESIDENTIAL | SMALL_COMMERCIAL | MEDIUM_COMMERCIAL | LARGE_COMMERCIAL | WAREHOUSE_INDUSTRIAL
+   sqft                Int?
+@@ -187,6 +216,17 @@ model Property {
+   opportunityScore Float?
+   solarScore       Float?
+ 
++  // Unified rank — emitted by nightly score-collapse job
++  score             Float?
++  scoreReasons     Json?    @default("[]")
++  dormantFlag      Boolean  @default(false)
++  claimWindowEndsAt DateTime?
++
++  // Metro + H3 — pre-computed for tile aggregation and metro-scoped queries
++  metroCode        String?
++  h3r6             String?
++  h3r8             String?
++
+   // Earmark — user flags during/after a storm for inspection
+   isEarmarked       Boolean   @default(false)
+   earmarkedAt       DateTime?
+@@ -199,6 +239,19 @@ model Property {
+   hailExposureDetails    Json?     @default("[]")
+   hailExposureComputedAt DateTime?
+ 
++  // SPC point-event rollup (permissive — raw reports, not MRMS-gated)
++  spcHailCount            Int?      @default(0)
++  spcHailCount5y          Int?      @default(0)
++  spcHailMaxInches        Float?
++  spcHailLastDate         DateTime? @db.Date
++  spcWindCount            Int?      @default(0)
++  spcWindCount5y          Int?      @default(0)
++  spcWindLastDate         DateTime? @db.Date
++  spcTornadoCount         Int?      @default(0)
++  spcTornadoLastDate      DateTime? @db.Date
++  spcSevereOrExtremeCount Int?      @default(0)
++  spcRolledUpAt           DateTime?
++
+   // Adjacent OSM business match
+   businessName     String?
+   businessCategory String?
+@@ -734,6 +787,32 @@ model ApiQuota {
+   @@map("api_quotas")
+ }
+ 
++// One row per first-time reveal of a property's PII per org per billing period.
++// Subsequent reveals of the same property by the same org in the same period are NOT billable.
++// `kind` lets us track reveal types separately ("reveal" = owner contact, "roof" = roof measurement).
++model PropertyReveal {
++  id          String       @id @default(uuid())
++  orgId       String
++  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
++  propertyId  String
++  userId      String
++  user        User         @relation(fields: [userId], references: [id])
++  kind        RevealKind   @default(REVEAL)
++  periodStart DateTime
++  revealedAt  DateTime     @default(now())
++  costCents   Int          @default(0)
++
++  @@unique([orgId, propertyId, kind, periodStart])
++  @@index([orgId, periodStart])
++  @@index([orgId, kind, periodStart])
++  @@map("property_reveals")
++}
++
++enum RevealKind {
++  REVEAL
++  ROOF_MEASUREMENT
++}
++
+ // Raw Madison County parcel data from City of Huntsville ArcGIS
+ // Source: https://maps.huntsvilleal.gov/server/rest/services/Planning/FindAProperty/MapServer
+ model MadisonParcelData {
+@@ -835,3 +914,76 @@ model PropertyAlert {
+   @@index([stormEventId])
+   @@map("property_alerts")
+ }
++
++// ---------------------------------------------------------------------------
++// Scale-ready: Metros, H3 aggregates, Pin-card denorm
++// ---------------------------------------------------------------------------
++model Metro {
++  code          String    @id
++  name          String
++  stateCodes    String[]
++  counties      String[]  @default([])
++  centerLat     Float
++  centerLon     Float
++  bboxMinLat    Float
++  bboxMaxLat    Float
++  bboxMinLon    Float
++  bboxMaxLon    Float
++  defaultZoom   Int       @default(9)
++  tier          String    @default("free")
++  status        String    @default("active")
++  launchedAt    DateTime?
++  createdAt     DateTime  @default(now())
++  updatedAt     DateTime  @updatedAt
++
++  hexAggregates PropertyHexAggregate[]
++  pinCards      PropertyPinCard[]
++
++  @@index([status])
++  @@map("metros")
++}
++
++model PropertyHexAggregate {
++  id            String   @id @default(cuid())
++  metroCode     String
++  resolution    Int
++  h3Cell        String
++  n             Int      @default(0)
++  scoreP50      Float?
++  scoreP90      Float?
++  scoreMax      Float?
++  dormantCount  Int      @default(0)
++  hailMaxInches Float?
++  avgRoofAge    Float?
++  centerLat     Float
++  centerLon     Float
++  updatedAt     DateTime @default(now()) @updatedAt
++
++  metro Metro @relation(fields: [metroCode], references: [code], onDelete: Cascade)
++
++  @@unique([metroCode, resolution, h3Cell])
++  @@index([metroCode, resolution])
++  @@map("property_hex_aggregates")
++}
++
++model PropertyPinCard {
++  propertyId     String   @id
++  metroCode      String?
++  payloadFree    Json
++  payloadPro     Json
++  score          Float?
++  dormantFlag    Boolean  @default(false)
++  // Canonical roof-age source bucket used to build the payload.
++  // Top-level column so filters/sorts don't need JSONB extracts.
++  // Values: measured | coc | permit | inferred | unknown.
++  roofAgeSource  String?
++  updatedAt      DateTime @default(now()) @updatedAt
++
++  metro Metro? @relation(fields: [metroCode], references: [code], onDelete: SetNull)
++
++  @@index([metroCode])
++  @@index([metroCode, score(sort: Desc)])
++  @@index([metroCode], map: "pin_cards_dormant_idx")
++  @@index([metroCode, roofAgeSource])
++  @@map("property_pin_cards")
++}

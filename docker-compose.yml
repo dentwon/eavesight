@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: stormvault
+      POSTGRES_DB: eavesight
     ports:
       - "5432:5432"
     volumes:
@@ -44,7 +44,7 @@ services:
   #   ports:
   #     - "4000:4000"
   #   environment:
-  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/stormvault
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/eavesight
   #     REDIS_URL: redis://redis:6379
   #   depends_on:
   #     postgres:

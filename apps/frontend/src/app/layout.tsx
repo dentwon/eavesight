@@ -15,24 +15,25 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Script to prevent theme flash on load - apply stored theme class immediately
+  // Pre-hydration theme script. Runs before React mounts so the user never
+  // sees a flash of the wrong theme. Writes are idempotent (removes both
+  // classes first, then adds one) so re-running it on nav can't leave both
+  // classes set at once. Default to 'dark' when storage is empty or broken.
   const themeScript = `
     (function() {
+      var theme = 'dark';
       try {
-        const stored = localStorage.getItem('preferences-storage');
+        var stored = localStorage.getItem('preferences-storage');
         if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.state && parsed.state.appTheme) {
-            document.documentElement.classList.add(parsed.state.appTheme);
-          } else {
-            document.documentElement.classList.add('dark');
+          var parsed = JSON.parse(stored);
+          if (parsed && parsed.state && parsed.state.appTheme) {
+            theme = parsed.state.appTheme;
           }
-        } else {
-          document.documentElement.classList.add('dark');
         }
-      } catch (e) {
-        document.documentElement.classList.add('dark');
-      }
+      } catch (e) { /* fall through to default */ }
+      var root = document.documentElement;
+      root.classList.remove('dark', 'light');
+      root.classList.add(theme);
     })();
   `;
 

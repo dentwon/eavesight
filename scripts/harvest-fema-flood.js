@@ -9,7 +9,7 @@
 const { Pool } = require('pg');
 const https = require('https');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 const URL = 'https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28/query';
 
 // North Alabama 5-county bbox (Madison/Limestone/Morgan/Marshall/Jackson)
@@ -29,7 +29,7 @@ function riskLabel(zone, sfha) {
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 120000, rejectUnauthorized: false, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; StormVault/1.0; +https://stormvault.local)', 'Accept': 'application/json' } }, res => {
+    const req = https.get(url, { timeout: 120000, rejectUnauthorized: false, headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Eavesight/1.0; +https://eavesight.local)', 'Accept': 'application/json' } }, res => {
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP '+res.statusCode)); }
       let d=''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e){ reject(e); }});
     });

@@ -8,7 +8,7 @@ const { Client } = require('pg');
 const https = require('https');
 const FormData = require('form-data');
 
-const PG = { host: 'localhost', port: 5433, database: 'stormvault', user: 'stormvault', password: process.env.DB_PASSWORD || 'stormvault' };
+const PG = { host: 'localhost', port: 5433, database: 'eavesight', user: 'eavesight', password: process.env.DB_PASSWORD || 'eavesight' };
 
 const BATCH = 10000;
 const PAUSE_MS = 600;

@@ -18,9 +18,9 @@ const DATA_DIR = '/home/dentwon/Eavesight/data';
 const pool = new Pool({
   host: 'localhost',
   port: 5433,
-  user: 'stormvault',
-  password: 'stormvault',
-  database: 'stormvault',
+  user: 'eavesight',
+  password: 'eavesight',
+  database: 'eavesight',
 });
 
 // Alabama bounding box

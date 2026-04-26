@@ -51,6 +51,20 @@ export default function LoginPage() {
             </div>
           )}
 
+          <a
+            href={`${process.env.NEXT_PUBLIC_API_URL || '/api'}/auth/google`}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 mb-6 border border-slate-600 rounded-lg bg-slate-900 hover:bg-slate-700 text-sm font-semibold text-white transition-colors"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.45-1.7 4.25-5.5 4.25-3.31 0-6-2.74-6-6.12s2.69-6.12 6-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C16.95 3.4 14.7 2.4 12 2.4 6.92 2.4 2.8 6.5 2.8 11.6S6.92 20.8 12 20.8c6.93 0 11.5-4.86 11.5-11.7 0-.78-.08-1.38-.2-1.97H12z" />
+            </svg>
+            Continue with Google
+          </a>
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-700/60"></div></div>
+            <div className="relative flex justify-center"><span className="bg-slate-800 px-3 text-xs text-slate-500 uppercase tracking-wide">or sign in with email</span></div>
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-slate-300">
@@ -63,7 +77,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                placeholder="test@stormvault.io"
+                placeholder="you@company.com"
               />
             </div>
 

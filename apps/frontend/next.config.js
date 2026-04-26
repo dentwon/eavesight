@@ -13,7 +13,7 @@ const nextConfig = {
     ];
   },
   images: {
-    domains: ['images.unsplash.com', 'api.stormvault.app'],
+    domains: ['images.unsplash.com', 'api.eavesight.app'],
   },
 }
 module.exports = nextConfig

@@ -24,7 +24,7 @@ for (const pkg of REQUIRED) {
 if (errors.length > 0) {
   console.error(`\n\x1b[31m[check-deps] BUILD REJECTED: cannot resolve ${errors.join(', ')} from apps/frontend\x1b[0m`);
   console.error('\x1b[33mFix: cd apps/frontend && npm install\x1b[0m');
-  console.error('\x1b[33mIf hoisted to workspace root, reinstall: (cd /home/dentwon/StormVault && npm install)\x1b[0m');
+  console.error('\x1b[33mIf hoisted to workspace root, reinstall: (cd /home/dentwon/Eavesight && npm install)\x1b[0m');
   process.exit(1);
 }
 

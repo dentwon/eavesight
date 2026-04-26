@@ -24,6 +24,29 @@ export class MapService {
   private readonly scoresCache = new TtlCache<string, Record<number, number>>(128, 60_000);
 
   /**
+   * SQL fragment that computes the canonical roof age for a property row.
+   * Mirrors estimateRoofAge() in leads/roof-age.util.ts.
+   *
+   * Phase 3.7a: honest ladder only. No anchor -> NULL (unknown).
+   * The old mod-22 inference branch (treating every old house as if it
+   * had been reroofed on a typical cycle) is dead — it was guessing,
+   * not knowing. We would rather have coverage gaps than false data.
+   * Anchor coverage is backfilled by Phase 3.7b-e (assessor audit,
+   * NAIP aerial differencing, listing-text mining, solar cross-ref).
+   */
+  private canonicalRoofAgeSql(currentYear: number, alias = 'p'): string {
+    const a = `${alias}`;
+    return `CASE
+      WHEN ${a}."roofInstalledAt" IS NOT NULL
+           AND (${currentYear} - EXTRACT(YEAR FROM ${a}."roofInstalledAt")::int) > 35
+        THEN NULL
+      WHEN ${a}."roofInstalledAt" IS NOT NULL
+        THEN GREATEST(0, ${currentYear} - EXTRACT(YEAR FROM ${a}."roofInstalledAt")::int)
+      ELSE NULL
+    END`;
+  }
+
+  /**
    * Get property by PMTiles ID
    */
   async getPropertyByPmtilesId(pmtilesId: string): Promise<any | null> {
@@ -96,24 +119,57 @@ export class MapService {
     const since = eighteenMonthsAgo.toISOString();
     const currentYear = new Date().getFullYear();
 
+    // Non-correlated form: compute storm counts once as a single GROUP BY
+    // scoped to the bbox's property set, then join back. Kills the
+    // per-building SubPlan that made this query O(buildings × storms).
     const rows = await this.prisma.$queryRawUnsafe<{pmtiles_id: number; score: number}[]>(`
-      WITH buildings AS (
+      WITH bbox_buildings AS (
+        -- Pull roofInstalledAt/Source/yearBuilt here so the canonical roof-age
+        -- CASE below can evaluate against bbox_buildings (aliased b) without
+        -- a second join back to properties.
         SELECT bf."pmtiles_id", bf."propertyId",
                p."yearBuilt", p."assessedValue",
-               EXISTS(SELECT 1 FROM "leads" l WHERE l."propertyId" = p.id) as has_lead,
-               (SELECT COUNT(*) FROM "property_storms" ps
-                JOIN "storm_events" se ON se.id = ps."stormEventId"
-                WHERE ps."propertyId" = p.id AND se.date >= '${since}'::timestamptz) as storm_count
+               p."roofInstalledAt", p."roofInstalledSource"
         FROM "building_footprints" bf
         JOIN "properties" p ON p.id = bf."propertyId"
         WHERE bf."pmtiles_id" IS NOT NULL
           AND bf."centroidLat" BETWEEN ${bbox.minLat} AND ${bbox.maxLat}
           AND bf."centroidLon" BETWEEN ${bbox.minLon} AND ${bbox.maxLon}
       ),
+      storm_counts AS (
+        SELECT ps."propertyId", COUNT(*)::int as storm_count
+        FROM "property_storms" ps
+        JOIN "storm_events" se ON se.id = ps."stormEventId"
+        WHERE se.date >= '${since}'::timestamptz
+          AND ps."propertyId" IN (SELECT "propertyId" FROM bbox_buildings)
+        GROUP BY ps."propertyId"
+      ),
+      lead_props AS (
+        SELECT DISTINCT "propertyId"
+        FROM "leads"
+        WHERE "propertyId" IN (SELECT "propertyId" FROM bbox_buildings)
+      ),
+      buildings AS (
+        SELECT b."pmtiles_id", b."propertyId", b."yearBuilt",
+               -- Canonical roof age for age-contribution scoring (see
+               -- estimateRoofAge in leads/roof-age.util.ts). Evaluated against
+               -- the CTE row itself (alias b) -- no extra properties join.
+               ${this.canonicalRoofAgeSql(currentYear, 'b')} AS canonical_age,
+               COALESCE(sc."storm_count", 0) as storm_count,
+               (lp."propertyId" IS NOT NULL) as has_lead
+        FROM bbox_buildings b
+        LEFT JOIN storm_counts sc ON sc."propertyId" = b."propertyId"
+        LEFT JOIN lead_props lp ON lp."propertyId" = b."propertyId"
+      ),
       scored AS (
         SELECT "pmtiles_id",
                LEAST(GREATEST((
-                 CASE WHEN "yearBuilt" IS NOT NULL THEN LEAST((${currentYear} - "yearBuilt") * 2.5, 100) ELSE 0 END +
+                 -- Age contribution: canonical roof-age (anchor if present,
+                 -- 0 if unknown). Phase 3.7a: no mod-22 inference.
+                 COALESCE(
+                   LEAST(canonical_age * 4.5, 100),
+                   0
+                 ) +
                  LEAST("storm_count" * 15, 60) +
                  CASE WHEN has_lead THEN 10 ELSE 30 END
                ), 0), 100)::int AS score
@@ -170,25 +226,30 @@ export class MapService {
     const currentYear = new Date().getFullYear();
 
     const rows = await this.prisma.$queryRawUnsafe<{pmtiles_id: number; score: number}[]>(`
-      WITH scored AS (
+      WITH age_rows AS (
         SELECT
           bf."pmtiles_id",
-          CASE
-            WHEN p."yearBuilt" IS NULL THEN 0
-            WHEN (${currentYear} - p."yearBuilt") >= 30 THEN 100
-            WHEN (${currentYear} - p."yearBuilt") >= 25 THEN 88
-            WHEN (${currentYear} - p."yearBuilt") >= 20 THEN 72
-            WHEN (${currentYear} - p."yearBuilt") >= 15 THEN 55
-            WHEN (${currentYear} - p."yearBuilt") >= 10 THEN 35
-            WHEN (${currentYear} - p."yearBuilt") >= 5  THEN 18
-            ELSE 5
-          END as score,
+          ${this.canonicalRoofAgeSql(currentYear)} AS age,
           ROW_NUMBER() OVER (ORDER BY bf."pmtiles_id") as rn
         FROM "building_footprints" bf
         JOIN "properties" p ON p.id = bf."propertyId"
         WHERE bf."pmtiles_id" IS NOT NULL
           AND bf."centroidLat" BETWEEN ${bbox.minLat} AND ${bbox.maxLat}
           AND bf."centroidLon" BETWEEN ${bbox.minLon} AND ${bbox.maxLon}
+      ),
+      scored AS (
+        SELECT
+          "pmtiles_id",
+          rn,
+          CASE
+            WHEN age IS NULL THEN 0
+            WHEN age >= 20 THEN 100
+            WHEN age >= 15 THEN 80
+            WHEN age >= 10 THEN 55
+            WHEN age >=  5 THEN 30
+            ELSE 10
+          END as score
+        FROM age_rows
       )
       SELECT "pmtiles_id", "score"
       FROM scored
@@ -206,16 +267,17 @@ export class MapService {
       WITH scored AS (
         SELECT
           bf."pmtiles_id",
+          -- canonical roof age (anchor if known, NULL if unknown — Phase 3.7a)
           CASE
-            WHEN p."yearBuilt" IS NULL THEN 0
-            WHEN (${currentYear} - p."yearBuilt") < 15 THEN 0
+            WHEN (${this.canonicalRoofAgeSql(currentYear)}) IS NULL THEN 0
+            WHEN (${this.canonicalRoofAgeSql(currentYear)}) < 15 THEN 0
             WHEN EXISTS (
               SELECT 1 FROM "leads" l
               WHERE l."propertyId" = p.id
                 AND l.status IN ('NEW','CONTACTED','QUALIFIED')
             ) THEN 0
-            WHEN (${currentYear} - p."yearBuilt") >= 25 THEN 85
-            WHEN (${currentYear} - p."yearBuilt") >= 20 THEN 65
+            WHEN (${this.canonicalRoofAgeSql(currentYear)}) >= 20 THEN 85
+            WHEN (${this.canonicalRoofAgeSql(currentYear)}) >= 18 THEN 65
             ELSE 40
           END as score,
           ROW_NUMBER() OVER (ORDER BY bf."pmtiles_id") as rn

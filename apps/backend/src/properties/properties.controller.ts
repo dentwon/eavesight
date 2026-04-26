@@ -1,10 +1,12 @@
-import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { PropertiesService } from './properties.service';
 import { PropertyEnrichmentService } from '../data-pipeline/property-enrichment.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SearchPropertiesDto } from './dto/search-properties.dto';
 import { LookupPropertyDto } from './dto/lookup-property.dto';
+import { RevealMeterService } from './reveal-meter.service';
 
 @ApiTags('properties')
 @Controller('properties')
@@ -14,6 +16,7 @@ export class PropertiesController {
   constructor(
     private readonly propertiesService: PropertiesService,
     private readonly enrichmentService: PropertyEnrichmentService,
+    private readonly revealMeter: RevealMeterService,
   ) {}
 
   @Get()
@@ -23,7 +26,7 @@ export class PropertiesController {
   }
 
   @Get('in-bounds')
-  @ApiOperation({ summary: 'Get properties in viewport bounds for map' })
+  @ApiOperation({ summary: 'Get properties in viewport bounds for map (no owner PII)' })
   async propertiesInBounds(
     @Query('north') north: string,
     @Query('south') south: string,
@@ -47,9 +50,21 @@ export class PropertiesController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get property by ID' })
-  findOne(@Param('id') id: string) {
-    return this.propertiesService.findOne(id);
+  @ApiOperation({ summary: 'Get property by ID (owner PII masked — call /reveal to unmask)' })
+  findOne(@Req() req: any, @Param('id') id: string) {
+    return this.propertiesService.findOne(id, { orgId: req.user?.orgId, userId: req.user?.id }, false);
+  }
+
+  @Post(':id/reveal')
+  @ApiOperation({ summary: 'Unmask owner PII for a property — consumes 1 reveal from quota (free if same property already revealed this period)' })
+  reveal(@Req() req: any, @Param('id') id: string) {
+    return this.propertiesService.findOne(id, { orgId: req.user?.orgId, userId: req.user?.id }, true);
+  }
+
+  @Get(':id/reveal/check')
+  @ApiOperation({ summary: 'Check if a reveal would consume quota, without performing it' })
+  checkReveal(@Req() req: any, @Param('id') id: string) {
+    return this.revealMeter.checkReveal(req.user?.orgId, id, 'reveal');
   }
 
   @Post('lookup')
@@ -65,6 +80,7 @@ export class PropertiesController {
   }
 
   @Post(':id/enrich')
+  @Throttle({ expensive: { ttl: 60_000, limit: 5 } })
   @ApiOperation({ summary: 'Enrich property with Census/FEMA public data' })
   enrichProperty(@Param('id') id: string) {
     return this.enrichmentService.enrichProperty(id);
@@ -77,7 +93,8 @@ export class PropertiesController {
   }
 
   @Post('enrich-all')
-  @ApiOperation({ summary: 'Batch enrich unenriched properties' })
+  @Throttle({ expensive: { ttl: 60_000, limit: 1 } })
+  @ApiOperation({ summary: 'Batch enrich unenriched properties (admin-only — heavy)' })
   enrichAll(@Body() body?: { limit?: number }) {
     return this.enrichmentService.enrichAllProperties(body?.limit || 20);
   }

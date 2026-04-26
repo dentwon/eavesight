@@ -3,7 +3,7 @@
  * Census Batch Geocoder — FAST with COPY + temp table
  * 10K/request Census API → ~18 min for 174K parcels
  *
- * Run: DB_PASSWORD=stormvault node scripts/batch-geocode.js
+ * Run: DB_PASSWORD=eavesight node scripts/batch-geocode.js
  */
 const { Client } = require('pg');
 const https = require('https');
@@ -11,7 +11,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 const { pipeline } = require('stream/promises');
 
-const PG = { host:'localhost', port:5433, database:'stormvault', user:'stormvault', password: process.env.DB_PASSWORD || 'stormvault' };
+const PG = { host:'localhost', port:5433, database:'eavesight', user:'eavesight', password: process.env.DB_PASSWORD || 'eavesight' };
 const BATCH = 10000;
 const PAUSE_MS = 500;
 const PROGRESS_FILE = '/tmp/geocode_progress.json';

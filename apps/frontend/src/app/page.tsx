@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Logo } from '@/components/Logo'
+import { PLANS, PLAN_ORDER } from '@/lib/plans'
 
 export default function HomePage() {
   return (
@@ -499,18 +500,93 @@ export default function HomePage() {
 
       {/* Pricing Section */}
       {/* ─── PRICING ─────────────────────────────────────────────────────────── */}
+      {/* Tier cards below are rendered from apps/frontend/src/lib/plans.ts
+          (mirrored to apps/backend/src/common/plans.ts). To change a price,
+          quota, feature label, or overage rate, edit BOTH files. Settings →
+          Billing tab reads the same PLANS constant so the marketing site and
+          in-app upgrade screen can never drift apart. */}
       <section id="pricing" className="py-24">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               One Tool. Whole Pipeline.
             </h2>
-            <p className="text-slate-400 text-lg max-w-xl mx-auto">
+            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
               Stop paying $900/mo for fragmented tools. Eavesight replaces your storm tracker, property intel, lead scoring, and CRM — for less than the cost of one roofing job.
+            </p>
+            <p className="text-slate-500 text-sm mt-3 max-w-2xl mx-auto">
+              Each tier unlocks new workflow features — not just more reveals. Pick the smallest tier that has the team-size and tooling you need.
             </p>
           </div>
 
-          {/* ── Main 3-tier grid ── */}
+          {/* ── 4-tier grid (Scout / Business / Pro / Enterprise) ── */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+            {PLAN_ORDER.map((code) => {
+              const plan = PLANS[code]
+              const isFeatured = !!plan.highlight
+              const cardClasses = isFeatured
+                ? 'card p-6 border-cyan-500/40 relative flex flex-col'
+                : 'card p-6 flex flex-col'
+              const ctaClasses = isFeatured
+                ? 'block text-center bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-3 rounded-xl font-bold transition-colors text-sm mt-auto shadow-lg shadow-cyan-500/20'
+                : plan.code === 'ENTERPRISE'
+                  ? 'block text-center bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-xl font-semibold transition-colors text-sm mt-auto'
+                  : 'block text-center bg-slate-800 border border-slate-700 text-white px-6 py-3 rounded-xl font-semibold hover:bg-slate-700 hover:border-slate-600 transition-all text-sm mt-auto'
+              return (
+                <div key={plan.code} className={cardClasses} style={isFeatured ? { overflow: 'visible' } : undefined}>
+                  {isFeatured && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-cyan-500 text-white text-xs px-4 py-1.5 rounded-full font-bold z-50 shadow-lg whitespace-nowrap">
+                      Most Popular
+                    </div>
+                  )}
+                  <div className="flex-grow">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
+                    </div>
+                    <p className="text-slate-500 text-sm mb-4">{plan.tagline}</p>
+                    <div className="mb-5">
+                      <span className="text-4xl font-bold text-white">{plan.priceDisplay}</span>
+                      {plan.priceMonthly > 0 && <span className="text-slate-500 text-sm ml-1">/month</span>}
+                    </div>
+                    <div className="bg-slate-800/40 rounded-lg px-3 py-2 mb-5 text-xs text-slate-400">
+                      <div><span className="text-slate-300 font-medium">{plan.revealQuota.toLocaleString()}</span> reveals included</div>
+                      {plan.revealOverageDisplay && <div className="text-slate-500 mt-0.5">{plan.revealOverageDisplay}</div>}
+                    </div>
+                    <ul className="space-y-2 mb-6">
+                      {plan.features.map((f) => (
+                        <li key={f.label} className="flex items-start gap-2.5 text-slate-400 text-sm">
+                          {f.status === 'soon' ? (
+                            <span className="w-4 h-4 mt-0.5 shrink-0 rounded-full border border-amber-500/60 inline-block" />
+                          ) : (
+                            <svg className={`w-4 h-4 mt-0.5 shrink-0 ${isFeatured ? 'text-cyan-500' : 'text-emerald-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          <span>
+                            {f.label}
+                            {f.status === 'soon' && <span className="ml-1 text-amber-400 text-xs">(coming soon)</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-xs text-slate-600 mb-4">
+                      <span className="text-slate-500">{plan.priceFinePrint}</span>
+                    </div>
+                  </div>
+                  <Link href={plan.ctaHref} className={ctaClasses}>
+                    {plan.ctaLabel}
+                  </Link>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* ── Old hand-coded tier blocks below were replaced by the data-driven
+                grid above. The legacy markup follows so we can drop it after a
+                visual review. Wrapped in `false &&` to keep the JSX valid until
+                someone confirms the new layout looks right and we delete it. ── */}
+          <div className="hidden">
+            {/* legacy:start */}
           <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
 
             {/* ── Scout (Free) ── */}
@@ -691,6 +767,8 @@ export default function HomePage() {
                 Talk to Sales
               </Link>
             </div>
+          </div>
+            {/* legacy:end */}
           </div>
 
           {/* ── Social proof bar ── */}

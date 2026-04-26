@@ -1,25 +1,34 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import api from '@/lib/api';
 import dynamic from 'next/dynamic';
 import { usePreferencesStore } from '@/stores/preferences';
+// ^ also used to key <MetroMap> on appTheme — see note near <MetroMap/> below.
+import type { MapView } from '@/components/metro/MetroMap';
 import { getPropertyValue } from '@/lib/propertyValue';
 import { MapPropertySheet } from '@/components/MapPropertySheet';
 import { QuickCaptureSheet } from '@/components/QuickCaptureSheet';
 import { DataConfidenceBadge } from '@/components/DataConfidenceBadge';
+import { consolidateStorms } from '@/lib/consolidateStorms';
+import { estimateRoofAge, roofAgeSuffix } from '@/lib/roofAgeEstimate';
 
-const StormMap = dynamic(() => import('@/components/map/StormMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-full bg-slate-900 text-slate-400">
-      <div className="text-center">
-        <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-        <p>Loading map…</p>
+// One map component, used here AND on /m/[metro]. Dashboard gets the sidebar
+// + lead-capture chrome around it; /m/[metro] uses a lighter wrapper.
+const MetroMap = dynamic(
+  () => import('@/components/metro/MetroMap').then((m) => m.MetroMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full bg-slate-900 text-slate-400">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
+          <p>Loading map…</p>
+        </div>
       </div>
-    </div>
-  ),
-});
+    ),
+  },
+);
 
 export default function MapPage() {
   const [selectedBuilding, setSelectedBuilding] = useState<any>(null);
@@ -37,23 +46,56 @@ export default function MapPage() {
 
   const sidebarExpanded = usePreferencesStore((s) => s.sidebarExpanded);
   const setSidebarExpanded = usePreferencesStore((s) => s.setSidebarExpanded);
+  // Theme flips force a full MetroMap remount. MapLibre's `setStyle` wipes all
+  // custom sources/layers synchronously and re-installing them in a `styledata`
+  // listener races with the basemap's own symbol layers, leaving the map flat
+  // until a manual reload. Keying the component on the theme is deterministic:
+  // the old instance unmounts (cleanup runs), a fresh one mounts with the
+  // correct basemap, and PMTiles/hex responses are browser-cached so the
+  // remount is cheap.
+  const appTheme = usePreferencesStore((s) => s.appTheme);
 
-  const handleBuildingClick = useCallback(async (building: any) => {
+  // Camera state survives the keyed remount because refs live on the parent,
+  // not the child. MetroMap emits onViewChange on every idle; on remount, the
+  // fresh instance reads this ref and mounts at the same center/zoom/pitch.
+  // Without this, theme swaps reset the user's scroll to the metro default.
+  const viewRef = useRef<MapView>({
+    // Huntsville, AL. Fixed metro center until the metro picker lands.
+    center: [-86.5854, 34.7304],
+    zoom: 10.5,
+    // Load flat and true-north-up. Tilt/rotate are opt-in gestures — the
+    // HexClad sheen activates above 10° pitch, so the first paint stays a
+    // clean baseline state the user can choose to animate into.
+    bearing: 0,
+    pitch: 0,
+  });
+  const handleViewChange = useCallback((v: MapView) => {
+    viewRef.current = v;
+  }, []);
+
+  // Brief curtain on theme swap. Mounts an opacity-1→0 scrim over the map for
+  // ~250ms so the remount doesn't flash an empty container. Keyed by
+  // appTheme so it re-plays on each flip; uses a CSS animation so there are
+  // no JS timers to clean up.
+  const [washKey, setWashKey] = useState(0);
+  useEffect(() => {
+    setWashKey((k) => k + 1);
+  }, [appTheme]);
+
+  const handlePropertyClick = useCallback(async (propertyId: string) => {
+    // MetroMap emits the property cuid directly. Fetch the full record so the
+    // sidebar has owner / value / year-built / roof / storms.
     let next: any = null;
     try {
-      const res = await api.get(`/map/pmtiles/${building.id}/property`);
+      const res = await api.get(`/properties/${propertyId}`);
       if (res.data) next = res.data;
     } catch (err) {
-      console.warn('Failed to fetch property by PMTiles ID:', err);
+      console.warn('[map] property fetch failed:', err);
     }
-
     if (!next) {
       next = {
-        id: building.id,
-        lat: building.lat,
-        lon: building.lon,
-        areaSqft: building.areaSqft,
-        address: 'Building ID: ' + building.id,
+        id: propertyId,
+        address: 'Property ' + propertyId,
         ownerFullName: 'Unknown',
         assessedValue: null,
         marketValue: null,
@@ -61,7 +103,6 @@ export default function MapPage() {
         propertyStorms: [],
       };
     }
-
     setSelectedBuilding(next);
     setMobileSheetOpen(true);
   }, []);
@@ -81,14 +122,18 @@ export default function MapPage() {
   return (
     <div className="flex h-full">
       {/* Desktop side panel (hidden on mobile — mobile uses MapPropertySheet) */}
+      {/* All surface colors read from the HSL token system (see globals.css)
+          so the aside flips automatically between light and dark. What was
+          previously hardcoded `bg-slate-900/95 text-white text-slate-400` now
+          uses `bg-card`, `text-card-foreground`, `text-muted-foreground`. */}
       <aside
-        className={`flex-shrink-0 relative bg-slate-900/95 border-r border-slate-700/50 transition-all duration-200 hidden md:flex flex-col z-10 ${
+        className={`flex-shrink-0 relative bg-card/95 text-card-foreground border-r border-border transition-all duration-200 hidden md:flex flex-col z-10 ${
           sidebarExpanded ? 'w-80' : 'w-10'
         }`}
       >
         <button
           onClick={() => setSidebarExpanded(!sidebarExpanded)}
-          className="absolute top-1/2 -translate-y-1/2 w-5 h-12 bg-slate-800 border border-slate-700/50 rounded-md flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          className="absolute top-1/2 -translate-y-1/2 w-5 h-12 bg-muted border border-border rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
           style={{ right: '-12px' }}
           title={sidebarExpanded ? 'Collapse panel' : 'Expand panel'}
         >
@@ -105,9 +150,9 @@ export default function MapPage() {
 
         {sidebarExpanded && (
           <div className="flex flex-col h-full overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700/50">
-              <h2 className="text-sm font-semibold text-white">Building Details</h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+            <div className="px-4 py-3 border-b border-border">
+              <h2 className="text-sm font-semibold text-foreground">Building Details</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Click a building on the map to see details
               </p>
             </div>
@@ -116,21 +161,21 @@ export default function MapPage() {
               {selectedBuilding ? (
                 <div className="px-4 py-3 space-y-3">
                   <div>
-                    <p className="text-sm font-semibold text-white">
+                    <p className="text-sm font-semibold text-foreground">
                       {selectedBuilding.address || 'Unknown Address'}
                     </p>
-                    <p className="text-xs text-slate-500">ID: {selectedBuilding.id}</p>
+                    <p className="text-xs text-muted-foreground">ID: {selectedBuilding.id}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Owner</p>
-                    <p className="text-xs text-slate-300">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Owner</p>
+                    <p className="text-xs text-foreground">
                       {selectedBuilding.ownerFullName || selectedBuilding.propertyOwner || 'Unknown'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Property Value</p>
-                      <p className="text-sm font-medium text-white">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Property Value</p>
+                      <p className="text-sm font-medium text-foreground">
                         {(() => {
                           const v = getPropertyValue(selectedBuilding);
                           return v ? `$${Math.round(v).toLocaleString()}` : 'N/A';
@@ -138,29 +183,50 @@ export default function MapPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Year Built</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Year Built</p>
                       <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium text-white">
-                          {selectedBuilding.yearBuilt || selectedBuilding.roofData?.yearBuilt || 'N/A'}
+                        <p className="text-sm font-medium text-foreground">
+                          {selectedBuilding.yearBuilt || 'N/A'}
                         </p>
-                        {(selectedBuilding.yearBuilt || selectedBuilding.roofData?.yearBuilt) && (
+                        {selectedBuilding.yearBuilt && (
                           <DataConfidenceBadge confidence={selectedBuilding.yearBuiltConfidence} />
                         )}
                       </div>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Roof Age</p>
-                      <p className="text-xs text-slate-300">
-                        {selectedBuilding.roofData?.age
-                          ? `${selectedBuilding.roofData.age} years`
-                          : selectedBuilding.yearBuilt
-                            ? `${new Date().getFullYear() - selectedBuilding.yearBuilt} years`
-                            : 'N/A'}
-                      </p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Roof Age</p>
+                      {(() => {
+                        const est = estimateRoofAge({
+                          yearBuilt: selectedBuilding.yearBuilt,
+                          roofInstalledAt: selectedBuilding.roofInstalledAt ?? null,
+                          roofInstalledSource: selectedBuilding.roofInstalledSource ?? null,
+                          roofData: selectedBuilding.roofData,
+                        });
+                        return (
+                          <p
+                            className="text-xs text-foreground"
+                            title={
+                              est.source === 'inferred'
+                                ? 'Estimated from year built (22-yr cycle)'
+                                : est.source === 'coc'
+                                  ? 'From Certificate of Occupancy'
+                                  : est.source === 'permit'
+                                    ? 'From building permit'
+                                    : est.source === 'measured'
+                                      ? 'Measured roof age'
+                                      : undefined
+                            }
+                          >
+                            {est.age != null
+                              ? `${est.age} years${roofAgeSuffix(est.source)}`
+                              : 'N/A'}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Area</p>
-                      <p className="text-xs text-slate-300">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Area</p>
+                      <p className="text-xs text-foreground">
                         {selectedBuilding.roofAreaSqft
                           ? `${Math.round(selectedBuilding.roofAreaSqft).toLocaleString()} sqft`
                           : selectedBuilding.buildingFootprint?.areaSqft
@@ -171,31 +237,34 @@ export default function MapPage() {
                   </div>
 
                   <div>
-                    <p className="text-[10px] uppercase tracking-wider text-slate-500 font-medium mb-1">Storm History</p>
-                    {selectedBuilding.propertyStorms && selectedBuilding.propertyStorms.length > 0 ? (
-                      <div className="space-y-2">
-                        {selectedBuilding.propertyStorms.slice(0, 3).map((stormLink: any) => {
-                          const storm = stormLink.stormEvent;
-                          return (
-                            <div key={storm.id} className="text-xs border border-slate-700/50 rounded p-2">
-                              <p className="text-slate-300">{new Date(storm.date).toLocaleDateString()}</p>
-                              <p className="text-slate-400">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Storm History</p>
+                    {(() => {
+                      const consolidated = consolidateStorms(selectedBuilding.propertyStorms || []);
+                      if (consolidated.length === 0) {
+                        return <p className="text-xs text-muted-foreground">No storm history recorded</p>;
+                      }
+                      return (
+                        <div className="space-y-2">
+                          {consolidated.slice(0, 3).map((storm) => (
+                            <div key={storm.key} className="text-xs border border-border rounded p-2">
+                              <p className="text-foreground">{storm.dateStr}</p>
+                              <p className="text-muted-foreground">
                                 {storm.type} - {storm.severity || 'Unknown'}
                               </p>
-                              {storm.hailSizeInches && (
-                                <p className="text-slate-500">Hail: {storm.hailSizeInches}" diameter</p>
+                              {storm.hailSizes.length > 0 && (
+                                <p className="text-muted-foreground">
+                                  Hail: {storm.hailSizes.map((s) => `${s}"`).join(', ')} diameter
+                                </p>
                               )}
                             </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-slate-500">No storm history recorded</p>
-                    )}
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <button
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2 rounded text-sm transition-colors mt-4"
+                    className="w-full bg-primary hover:brightness-110 text-primary-foreground font-medium py-2 rounded text-sm transition-all mt-4"
                     onClick={() => openLeadFromProperty(selectedBuilding)}
                   >
                     Create Lead
@@ -203,7 +272,7 @@ export default function MapPage() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full px-4 text-center">
-                  <p className="text-xs text-slate-500">Click a building on the map to see details</p>
+                  <p className="text-xs text-muted-foreground">Click a building on the map to see details</p>
                 </div>
               )}
             </div>
@@ -213,11 +282,28 @@ export default function MapPage() {
 
       {/* Map */}
       <div className="flex-1 relative">
-        <StormMap
-          center={[-86.5854, 34.7304]}
-          zoom={12}
-          onBuildingClick={handleBuildingClick}
-          className="w-full h-full"
+        <MetroMap
+          key={appTheme}
+          metroCode="north-alabama"
+          center={viewRef.current.center}
+          // 10.5 = metro-scale view with hex heatmap visible on load.
+          // User can zoom to 13-15 to see PMTiles buildings; hexes now fade
+          // gently into a texture behind them rather than vanishing at 12.
+          initialZoom={viewRef.current.zoom}
+          initialBearing={viewRef.current.bearing}
+          initialPitch={viewRef.current.pitch}
+          onViewChange={handleViewChange}
+          onPinClick={handlePropertyClick}
+        />
+        {/* Theme-swap curtain. One-shot CSS animation keyed off `washKey`,
+            so it only paints during the ~250ms around a remount and doesn't
+            eat input the rest of the time. `bg-background` reads the
+            incoming theme's surface token, so the flash stays neutral on
+            either direction. */}
+        <div
+          key={washKey}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-30 bg-background animate-map-wash"
         />
       </div>
 

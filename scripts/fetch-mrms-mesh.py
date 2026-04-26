@@ -69,9 +69,9 @@ OUTPUT_DIR = DATA_DIR / "mesh_output"
 DB_CONFIG = {
     "host": "localhost",
     "port": 5433,
-    "user": "stormvault",
-    "password": "stormvault",
-    "dbname": "stormvault",
+    "user": "eavesight",
+    "password": "eavesight",
+    "dbname": "eavesight",
 }
 
 

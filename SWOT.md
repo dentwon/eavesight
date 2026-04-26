@@ -1,6 +1,6 @@
 # Eavesight SWOT Analysis
 
-**March 2026**
+**Updated: April 2026** (product is live in closed beta)
 
 ---
 
@@ -9,34 +9,35 @@
 ### Internal Advantages
 
 1. **Integrated Data Approach**
-   - Only platform combining storm data, property info, roof age, and owner contacts
-   - Single dashboard vs. multiple disconnected tools
-   - Unified user experience
+   - Only platform combining nationwide storm history, parcel-level property records, permit history, and lead scoring on one map
+   - 2.1M storm events + 243K North Alabama properties + 6.6M property↔storm links already loaded
+   - Unified 0-100 score with dormant-flag and claim-window signals
 
-2. **Agile Development**
-   - Can ship fast without enterprise bureaucracy
-   - Iterate based on real user feedback
-   - Adapt quickly to market changes
+2. **Shipped Product**
+   - MVP live, not vaporware; dashboard, mobile bottom-sheet, metro-scoped map all working
+   - Scale-ready infrastructure already in place: H3 hex aggregates, pin-card denormalization, metro registry for drop-in new-market launches
+   - 8 migrations deployed; nightly worker pipeline runs unattended
 
-3. **Cost Structure**
-   - 60-80% lower price than competitors
-   - Modern tech stack reduces infrastructure costs
-   - Lean operations from day one
+3. **Cost Structure & Pricing**
+   - Flat company pricing with metered reveals (no per-user fees)
+   - Business at $99 and Pro at $249 materially undercut HailTrace ($500+) / Telefi ($300+) / AccuLynx ($400+)
+   - Scout Free tier removes signup friction and drives funnel
 
-4. **Founder Expertise**
-   - Deep understanding of roofing industry pain points
-   - Proven ability to identify market opportunities
-   - Hands-on approach to product development
+4. **Agility**
+   - Solo/small team — can ship without enterprise bureaucracy
+   - Iterate based on closed-beta feedback
+   - Adapt quickly to data-source changes and market signals
 
 5. **Technical Architecture**
-   - Scalable design for future growth
-   - Modular API structure for easy integrations
-   - Cloud-native infrastructure
+   - Prisma + PostgreSQL/PostGIS + Redis/BullMQ + MapLibre
+   - Viewport-bound pin queries replace expensive "top-N" map fetches
+   - Pin-card payloads tiered by entitlement (Free / Pro) at the API layer
+   - Metro-scoped routing (`/m/[metro]`) ready for second-metro launch without UI changes
 
-6. **Brand Positioning**
+6. **Brand & Positioning**
    - Clear, memorable name (Eavesight)
-   - Strong value proposition messaging
-   - Professional, trustworthy image
+   - Landing-page value prop anchored on ROI math ("1 closed job = 56× monthly cost")
+   - Live beta promo ("first 100 users get 3 months free") reduces objection to signing up
 
 ---
 
@@ -44,35 +45,34 @@
 
 ### Internal Limitations
 
-1. **Limited Budget**
-   - $100 initial investment is extremely constrained
-   - May require personal funds for critical expenses
-   - Limited marketing budget slows growth
+1. **Contact Data Gap**
+   - Zero owner phones / emails / DNC entries across 243K properties
+   - Blocks the TCPA-compliant outreach the business plan sells
+   - Skip-trace integration is the highest-priority unlock (see DATA_AUDIT_GAP_ANALYSIS.md)
 
-2. **No Existing Customer Base**
-   - Zero brand recognition entering market
-   - No proven track record or testimonials
-   - Need to build credibility from scratch
+2. **Roof Data is Empty**
+   - The `roof_data` table (material, pitch, facets, squares, cost estimates) has zero rows
+   - This is the keystone differentiator vs HailTrace and it ships blank today
+   - Need to pick a source (Roofr / EagleView / Nearmap / GeoX, or geometry-based estimator)
 
-3. **Single Founder**
-   - Wearing multiple hats (product, sales, dev, support)
-   - Limited bandwidth for all tasks
-   - Higher risk of burnout
+3. **Billing & Metering Not Wired**
+   - No Stripe customer IDs on any org; `ApiUsage`/`ApiQuota` tables empty
+   - No property-reveal meter — the metered unit of value has no backing ledger
+   - No roof-measurement credit ledger
+   - Tiers cannot be enforced on day one of paid launch
 
-4. **Technical Constraints**
-   - Dependent on third-party API reliability
-   - Data quality varies by source
-   - Rate limits on free/low-cost tiers
+4. **Single-Metro Depth**
+   - 100% of property data is Alabama; Nashville not yet ingested
+   - Year-built confidence is 98% inferred (ACS median or KNN) — only 1.7% VERIFIED
+   - "Aging roofs" pitch needs better ground truth
 
-5. **Limited Features at Launch**
-   - MVP will have fewer features than competitors
-   - May not satisfy all customer needs initially
-   - Feature gaps could lose potential customers
+5. **Limited Founder Bandwidth**
+   - Solo-to-small team wearing product, sales, ops, dev hats
+   - Closed beta under 20 users; operational load will climb fast
 
-6. **Time to Market**
-   - Competitors have head start
-   - Need to move fast while maintaining quality
-   - Development speed vs. code quality tradeoff
+6. **Storm Overlays Are Points, Not Polygons**
+   - `pathGeometry` is empty; tornado/wind swath polygons not stored
+   - Reduces the visual impact of storm overlays compared to HailTrace-style maps
 
 ---
 
@@ -81,45 +81,39 @@
 ### External Growth Drivers
 
 1. **Market Gap**
-   - No direct competitor offers full integration
-   - Existing solutions are fragmented and expensive
-   - Roofers actively seeking better tools
+   - No direct competitor offers full storm + property + owner + roof-age integration
+   - Competitors are fragmented and priced 2-4× our tiers
+   - Roofers are actively seeking better tools
 
 2. **Market Size**
-   - $76B roofing industry in U.S.
-   - 100,000+ roofing businesses as potential customers
-   - Storm events create constant demand cycles
+   - $76B+ U.S. roofing industry; 100,000+ roofing businesses
+   - Storm events create continuous demand cycles
+   - Aging housing stock (38% of homes are 30+ years old) drives replacement cycles
 
-3. **Technology Trends**
-   - Increasing adoption of SaaS in construction industry
-   - Growing demand for data-driven decision making
-   - Mobile-first design opportunities
+3. **Geographic Expansion Template**
+   - Metro-scoped API + pin-card denorm means new metros drop in by ingesting data + registering a `Metro` record
+   - Nashville queued as second metro; Austin/Atlanta/Birmingham follow
+   - Dixie Alley + Southeast storm belt is our natural expansion path
 
-4. **Partnership Opportunities**
-   - Roofing material manufacturers (GAF, Owens Corning)
-   - Industry associations (NRCA)
-   - Adjacent software providers (CRM, project management)
-   - Insurance companies seeking contractor networks
+4. **Partnerships**
+   - Material suppliers (GAF, Owens Corning)
+   - Roofing associations (NRCA)
+   - Adjacent software (Jobber, Housecall Pro) for CRM handoff
+   - Insurance adjuster firms (Enterprise tier)
 
 5. **Network Effects**
-   - More users = more data insights
-   - User contributions improve data quality
-   - Community features create stickiness
+   - More active roofers = more claim/permit/status signals feeding the score
+   - User-flagged earmarks and dormant-flag feedback improve future scoring
 
-6. **Geographic Expansion**
-   - Storm-prone regions across entire U.S.
-   - International markets (Canada, Australia) for later expansion
-   - Local-first approach creates expansion template
+6. **Enterprise Upsell**
+   - Multi-crew operations are the highest-ARPU segment
+   - Territory locking + team routing + GPS + API → Enterprise tier justifies 5-10× Pro pricing
+   - First Enterprise pilot planned for H2
 
-7. **Vertical Integration**
-   - Expand beyond roofing to siding, gutters, windows
-   - Serve adjacent markets (solar, HVAC)
-   - Insurance company enterprise deals
-
-8. **Economic Factors**
-   - Aging housing stock drives renovation demand
-   - Insurance companies increasingly require professional documentation
-   - Climate change increases storm frequency/intensity
+7. **Economic / Regulatory Tailwinds**
+   - Climate change increasing storm frequency + severity
+   - Insurers increasingly requiring professional documentation
+   - Aging housing stock + high material costs push replacement over repair
 
 ---
 
@@ -128,45 +122,34 @@
 ### External Challenges
 
 1. **Competitive Response**
-   - Established players may cut prices
-   - Well-funded competitors could replicate features
-   - Brand loyalty to existing solutions
+   - HailTrace, Telefi, AccuLynx could cut price or add missing features
+   - Well-funded incumbents could replicate our integration faster than we expand metros
 
-2. **Economic Volatility**
-   - Recession could reduce contractor spending
-   - Construction industry downturn impacts all players
-   - Variable storm seasons affect demand
+2. **Regulatory Risk (TCPA / DNC)**
+   - Outbound call/SMS rules are strict; single enforcement action could kneecap trust
+   - DNC compliance isn't optional — `dnc_entries` table is empty today
+   - State-level lead-generation laws vary
 
-3. **Technical Risks**
-   - API providers change pricing or terms
-   - Data sources become unavailable
-   - Infrastructure failures impact service
+3. **Data Source Risk**
+   - County ArcGIS services change schema or rate limits with no notice
+   - Microsoft building footprints are a free gift that could go away
+   - SPC data format changes would disrupt ingest
 
-4. **Regulatory Challenges**
-   - Data privacy regulations (CCPA, GDPR)
-   - Telephone Consumer Protection Act (TCPA) for outreach
-   - Do Not Call registry compliance
-   - Varying state laws for lead generation
+4. **Skip-Trace Cost Risk**
+   - Contact-data vendors (Endato, BatchSkipTrace, Telnyx) price per lookup; scales with reveal volume
+   - Must be priced into reveal unit economics; if vendor raises prices, margins compress
 
-5. **Market Saturation**
-   - Low barriers attract many competitors
-   - Race to bottom pricing in commodity markets
-   - Differentiation becomes harder over time
+5. **Economic Volatility**
+   - Recession → contractors cut software subscriptions
+   - Construction slowdown → fewer reveals → lower metered revenue
 
-6. **Customer Churn**
-   - Roofers may试用 and abandon if not seeing results
-   - Economic pressure leads to cutting software subscriptions
-   - Better alternatives emerge
+6. **Market Saturation**
+   - Low-barrier segments attract commodity competitors
+   - Race-to-bottom pricing risk once differentiation erodes
 
-7. **Data Quality**
-   - Inaccurate storm data affects credibility
-   - Property data gaps in rural areas
-   - Owner contact information becomes outdated
-
-8. **Talent Acquisition**
-   - Competition for skilled developers
-   - Remote work increases competition globally
-   - Salary inflation impacts margins
+7. **Technical Risk**
+   - Single-instance Postgres through Year 1; a disk-full or replication lag incident is unrecoverable without good backup discipline
+   - Rate limits on free geocoders (Nominatim) can throttle nightly backfills
 
 ---
 
@@ -175,17 +158,17 @@
 |  | **Helpful** | **Harmful** |
 |----------------|-------------------------------|----------------------------------|
 | **Internal** | **Strengths** | **Weaknesses** |
-|  | • Integrated data approach | • Limited $100 budget |
-|  | • Fast, agile development | • No existing customers |
-|  | • 60-80% cost advantage | • Single founder bandwidth |
-|  | • Scalable architecture | • Limited MVP features |
-|  | • Clear brand positioning | • Technical dependencies |
+|  | • Integrated storm + property stack | • Zero owner phones/emails |
+|  | • Live shipped product | • Roof data table empty |
+|  | • 40-70% below competitor pricing | • Stripe billing + reveal meter not wired |
+|  | • Scale-ready metro architecture | • Single-metro depth today |
+|  | • Clear brand + live beta promo | • Solo / small team bandwidth |
 | **External** | **Opportunities** | **Threats** |
-|  | • $76B market with demand | • Competitor price cuts |
-|  | • No direct competitor | • Economic downturn |
-|  | • Partnership potential | • API provider changes |
-|  | • Network effects | • Regulatory compliance |
-|  | • Geographic expansion | • Customer churn |
+|  | • $76B market with no integrated competitor | • Competitors cutting prices or copying |
+|  | • Southeast storm-belt expansion path | • TCPA / DNC enforcement risk |
+|  | • Partnership + integration channels | • Data-source schema / pricing changes |
+|  | • Enterprise multi-crew upsell | • Skip-trace cost compression on margins |
+|  | • Network effects from user signals | • Recession reducing contractor spend |
 
 ---
 
@@ -193,66 +176,58 @@
 
 ### Leverage Strengths to Capture Opportunities
 
-1. **S1 + O1 + O2**: Use integrated approach to fill market gap; promote 60-80% cost savings
-2. **S2 + O3 + O4**: Ship fast, iterate; establish partnerships with industry players
-3. **S4 + O6**: Use scalable architecture to expand geographically
+1. **S1 + O1 + O2**: Lead all marketing with the integration story (storm + property + owner + roof age on one map); anchor pricing against HailTrace/Telefi/AccuLynx stack cost ($900+/mo).
+2. **S2 + O3**: Use metro-scoped architecture to launch Nashville cleanly, prove the expansion template works, then move on Birmingham/Atlanta/Austin in Year 2.
+3. **S5 + O6**: Enterprise tier's API + territory locking + team routing is already schema-supported — pilot with multi-crew ops early in H2.
 
-### Counter Weaknesses to Mitigate Threats
+### Counter Weaknesses Before Paid Launch
 
-1. **W1 + T2**: Bootstrap with minimal costs; focus on essential features only
-2. **W3 + T1**: Build community; offer exceptional support to create loyalty
-3. **W5 + T8**: Prioritize high-impact features; validate with customers before building
+1. **W1 + T2 (contact data + TCPA)**: Wire skip-trace + load federal DNC registry before any outreach-related feature goes paid. This is the single biggest launch blocker.
+2. **W2 + S1 (roof data + integrated story)**: Pick a roof-measurement source this quarter; even 10% coverage beats 0%. Without this, the "integrated" pitch is a three-legged stool.
+3. **W3 (billing/meter)**: Build the property-reveal meter and Stripe webhook before the first paid cohort graduates from the promo.
 
 ### Protect Against Threats Using Strengths
 
-1. **T1 + S3**: Compete on price advantage; emphasize value proposition
-2. **T3 + S5**: Build redundancy into tech stack; maintain backup providers
-3. **T4 + S1**: Differentiate through integration; simplify compliance
+1. **T1 + S3**: Pricing advantage is defensive — keep the flat-company / no-per-user story front-and-center; competitors with per-seat models can't match without breaking their own economics.
+2. **T3 + S5**: Backup ingest paths for parcel data (if one county's ArcGIS breaks, cached nightly snapshot lets the map keep working).
+3. **T4 + S3**: Pass-through skip-trace cost by metering reveals — don't subsidize it out of the flat tier.
 
-### Minimize Weaknesses and Avoid Threats
+### Minimize Weaknesses, Avoid Threats
 
-1. **W1 + W2**: Use $100 wisely; leverage personal network for first customers
-2. **W4 + T6**: Focus on core value; deliver exceptional results for early users
-3. **W6 + T1**: Move fast but smart; focus on differentiation over features
+1. **W5 + T5 (founder bandwidth + recession)**: Keep fixed costs low through Year 1; resist hiring until reveal-meter revenue is live and predictable.
+2. **W6 + S1 (polygon gaps)**: Backfill `pathGeometry` from SPC swath shapefiles — polygon overlays make the map look like HailTrace without changing the backend.
 
 ---
 
 ## Key Takeaways
 
 ### Top 3 Strengths to Emphasize
-1. Integrated data approach (only platform with all data types)
-2. 60-80% cost advantage over competitors
-3. Fast, agile development capability
+1. Integrated storm + property + owner + roof-age stack (no competitor has all four)
+2. Shipped, scale-ready product with metro-expansion template
+3. 40-70% pricing advantage with flat company pricing + no per-user fees
 
-### Top 3 Weaknesses to Address
-1. Extremely limited budget ($100)
-2. No existing customer base or brand recognition
-3. Single founder bandwidth limitations
+### Top 3 Weaknesses to Address (by next paid launch)
+1. Owner phone/email (skip-trace integration)
+2. Roof data source (measurement vendor or geometry estimator)
+3. Reveal meter + Stripe billing wired end-to-end
 
 ### Top 3 Opportunities to Pursue
-1. Clear market gap with no direct competitor
-2. $76B industry with 100,000+ potential customers
-3. Partnership opportunities with industry players
+1. Nashville launch in H2 to prove multi-metro expansion template
+2. First Enterprise pilot with a multi-crew operation (highest ARPU)
+3. Partnership with a material supplier (distribution channel at scale)
 
 ### Top 3 Threats to Monitor
-1. Established competitors cutting prices
-2. Economic downturn reducing contractor spending
-3. API/data provider changes affecting service
+1. Competitor price cuts or integration catch-up
+2. TCPA / DNC exposure if outreach ships without compliance hardening
+3. Data-source schema / pricing changes (county ArcGIS, skip-trace vendor)
 
 ---
 
 ## Conclusion
 
-Eavesight's strengths (integrated approach, cost advantage, agile development) position us well to capture significant opportunities (market gap, industry partnerships, geographic expansion) despite threats from established competitors and economic uncertainty.
-
-The key to success is focusing on:
-1. **Speed**: Ship MVP fast and iterate
-2. **Value**: Emphasize integration and cost savings
-3. **Customer Success**: Ensure early users see real results
-
-By concentrating resources on high-impact activities and maintaining flexibility, Eavesight can establish itself as the industry standard for roofing lead generation within 12-18 months.
+Eavesight has a live, integrated product in a fragmented market, with pricing that undercuts every direct competitor and a scale-ready architecture that makes multi-metro expansion a data problem, not a rewrite. The three critical gaps before paid launch are contact data, roof data, and the metering/billing plumbing. Closing those, launching Nashville in Q3, and piloting Enterprise in Q4 should put the company at ~$500K run-rate ARR by the end of Year 1 (see `BUSINESS_PLAN.md § Financial Projections` for the full ramp).
 
 ---
 
 *Eavesight SWOT Analysis*
-*March 2026*
+*April 2026*

@@ -6,7 +6,9 @@ import { Sheet } from '@/components/ui/sheet';
 import { DataConfidenceBadge } from '@/components/DataConfidenceBadge';
 import { EarmarkButton } from '@/components/EarmarkButton';
 import { getPropertyValue } from '@/lib/propertyValue';
+import { consolidateStorms, type ConsolidatedStorm } from '@/lib/consolidateStorms';
 import { cn } from '@/lib/utils';
+import { estimateRoofAge, roofAgeSuffix, roofAgeSourceLabel } from '@/lib/roofAgeEstimate';
 
 /**
  * MapPropertySheet - mobile property detail sheet.
@@ -35,6 +37,8 @@ interface MapProperty {
   marketValue?: number | null;
   yearBuilt?: number | null;
   yearBuiltConfidence?: string | null;
+  roofInstalledAt?: string | Date | null;
+  roofInstalledSource?: string | null;
   roofAreaSqft?: number | null;
   roofSizeClass?: string | null;
   urgencyScore?: number | null;
@@ -62,7 +66,20 @@ interface Props {
 }
 
 export function MapPropertySheet({ open, property, onClose, onCreateLead }: Props) {
+  // IMPORTANT: all hooks must be called unconditionally every render. Having an
+  // 'if (!property) return null' between two useMemos trips Rules of Hooks —
+  // the 2nd useMemo only fires once property is set, so the hook count changes
+  // between renders and React throws mid-reconciliation. The resulting crash
+  // corrupts the render tree past the reach of the nearest error boundary,
+  // which is why it surfaces as Next.js' generic 'Application error' wall.
   const value = useMemo(() => (property ? getPropertyValue(property) : null), [property]);
+  // Group raw propertyStorms rows by (localDate, type). Same day, same type =
+  // one line with hail sizes collapsed into a comma list. Keeps the list
+  // readable when NOAA emits 3-4 overlapping reports for one storm cell.
+  const consolidatedStorms = useMemo(
+    () => (property ? consolidateStorms(property.propertyStorms || []) : []),
+    [property],
+  );
 
   if (!property) return null;
 
@@ -71,12 +88,21 @@ export function MapPropertySheet({ open, property, onClose, onCreateLead }: Prop
   const roofSqft =
     property.roofAreaSqft ??
     (property.buildingFootprint?.areaSqft ? Number(property.buildingFootprint.areaSqft) : null);
-  const yearBuilt = property.yearBuilt ?? property.roofData?.yearBuilt ?? null;
-  const roofAge = yearBuilt ? new Date().getFullYear() - yearBuilt : property.roofData?.age ?? null;
-  const stormCount = property.propertyStorms?.length ?? 0;
+  const yearBuilt = property.yearBuilt ?? null;
+  // Use shared helper -> never produces a >35yr roof age, and distinguishes
+  // measured vs inferred (see lib/roofAgeEstimate).
+  const roofAgeEst = estimateRoofAge({
+    yearBuilt,
+    roofInstalledAt: property.roofInstalledAt ?? null,
+    roofInstalledSource: property.roofInstalledSource ?? null,
+    roofData: property.roofData,
+  });
+  const roofAge = roofAgeEst.age;
+  const roofAgeSource = roofAgeEst.source;
   const phone = property.phone || property.ownerPhone || null;
   const canNavigate = typeof property.lat === 'number' && typeof property.lon === 'number';
-  const recentStorms = (property.propertyStorms || []).slice(0, 3);
+  const stormCount = consolidatedStorms.length;
+  const recentStorms = consolidatedStorms.slice(0, 3);
 
   const navigate = () => {
     if (!canNavigate) return;
@@ -110,7 +136,7 @@ export function MapPropertySheet({ open, property, onClose, onCreateLead }: Prop
           icon={Ruler}
           label="Roof"
           value={roofSqft ? `${Math.round(roofSqft).toLocaleString()} sqft` : '-'}
-          hint={property.roofSizeClass || (roofAge ? `${roofAge}y old` : undefined)}
+          hint={property.roofSizeClass || (roofAge != null ? `${roofAge}y old${roofAgeSuffix(roofAgeSource)}` : undefined)}
         />
         <StatTile
           icon={Wind}
@@ -128,7 +154,7 @@ export function MapPropertySheet({ open, property, onClose, onCreateLead }: Prop
           </p>
           <div className="space-y-1.5">
             {recentStorms.map((s) => (
-              <StormRow key={s.stormEvent.id} storm={s.stormEvent} />
+              <StormRow key={s.key} storm={s} />
             ))}
           </div>
         </div>
@@ -225,9 +251,10 @@ function StatTile({
   );
 }
 
-function StormRow({ storm }: { storm: { date: string; type: string; severity?: string | null; hailSizeInches?: number | null } }) {
-  const d = new Date(storm.date);
-  const dateStr = isNaN(d.getTime()) ? storm.date : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+function StormRow({ storm }: { storm: ConsolidatedStorm }) {
+  const hailLabel = storm.hailSizes.length
+    ? storm.hailSizes.map((s) => `${s}"`).join(', ')
+    : null;
   return (
     <div className="flex items-center justify-between gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 px-2.5 py-1.5 text-xs">
       <div className="flex items-center gap-1.5 min-w-0">
@@ -235,13 +262,14 @@ function StormRow({ storm }: { storm: { date: string; type: string; severity?: s
         <span className="truncate">{storm.type}</span>
       </div>
       <div className="flex items-center gap-1.5 shrink-0 text-muted-foreground">
-        {storm.hailSizeInches ? <span>{storm.hailSizeInches}"</span> : null}
+        {hailLabel ? <span>{hailLabel}</span> : null}
         {storm.severity ? <span>{storm.severity}</span> : null}
-        <span>{dateStr}</span>
+        <span>{storm.dateStr}</span>
       </div>
     </div>
   );
 }
+
 
 function ActionBtn({
   Icon,

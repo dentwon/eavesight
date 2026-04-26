@@ -13,12 +13,12 @@
 const { Pool } = require('pg');
 const https = require('https');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 const COUNTIES = ['089','083','103','095','071']; // Madison, Limestone, Morgan, Marshall, Jackson
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout: 120000, rejectUnauthorized: false, headers: { 'User-Agent': 'Mozilla/5.0 StormVault' } }, res => {
+    const req = https.get(url, { timeout: 120000, rejectUnauthorized: false, headers: { 'User-Agent': 'Mozilla/5.0 Eavesight' } }, res => {
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP '+res.statusCode)); }
       let d=''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e){ reject(e); }});
     });

@@ -1,192 +1,152 @@
-# Eavesight $100 Deployment Strategy
+# Eavesight Deployment Strategy
 
-## 🎯 Objective
-Deploy Eavesight with maximum ROI using only the $100 seed money, leveraging free tiers and open-source solutions wherever possible.
+**Updated: April 2026**
 
-## 💰 Budget Allocation
+Eavesight is live in closed beta. This doc describes the current hosting posture and the near-term scale-up plan. (For first-time dev setup, see [README.md](./README.md); for CLI/Vercel frontend deploy steps, see [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md).)
 
-| Item | Cost | Notes |
-|------|------|-------|
-| Domain Registration | $15 | eavesight.app (1 year) |
-| GitHub Organization | $0 | Free tier sufficient |
-| Initial Marketing | $30 | Social media ads, contractor outreach |
-| Contingency Buffer | $55 | Reserved for unexpected costs |
+## Current State
 
-## 🚀 Deployment Approach
+### Services running
 
-### Phase 1: Immediate Deployment (Week 1)
-**Goal**: Get live with sample data for demonstration
+- **Frontend (Next.js 14)** — Vercel production, `eavesight.com`
+- **Backend (NestJS)** — Node process on VPS, reverse-proxied through nginx, TLS via Let's Encrypt
+- **Database** — PostgreSQL 14 + PostGIS (dev: Docker on `localhost:5433`; production: managed instance)
+- **Cache / Queue** — Redis 7 (dev: Docker; production: managed instance)
+- **Workers** — BullMQ processors for storm ingest, nightly score-collapse, hex aggregate rebuild, pin-card rebuild, hail exposure computation
 
-1. **Domain Registration** ($15)
-   - Register `eavesight.app` through Namecheap/Gandi
-   - DNS configuration for both frontend and backend
+### Data footprint
 
-2. **Self-Hosted Deployment** ($0)
-   - Use existing cloud infrastructure (AWS EC2 t3.micro free tier)
-   - Docker Compose deployment for both frontend and backend
-   - Let's Encrypt SSL certificates (free)
+- 243K properties, 2.1M storm events, 6.6M property↔storm links, 4,660 H3 hex aggregates, 30K permits, 174K raw parcels — all loaded and queryable. See [DATA_AUDIT_GAP_ANALYSIS.md](./DATA_AUDIT_GAP_ANALYSIS.md) for coverage detail.
+- Postgres DB size currently dominated by `property_storms` (6.6M rows) and `storm_events` (2.1M rows). No sharding yet; single-instance is fine through Year-1 load.
 
-3. **Database** ($0)
-   - Continue using PostgreSQL on same instance
-   - Backup/restore sample data from development
+### Geographic coverage
 
-### Phase 2: Customer Validation (Week 2-3)
-**Goal**: Acquire first paying customers
+- **Live metro:** Huntsville / North Alabama (Madison, Limestone, Morgan, Marshall, Jackson counties)
+- **Storm data:** nationwide (will stay nationwide — property-level metros are what's gated)
+- **Next metro:** Nashville (Davidson, Williamson, Rutherford, Sumner, Wilson) — CAD ingestion queued
 
-1. **Beta Program Launch**
-   - Reach out to 25 local roofing contractors
-   - Offer free 30-day trial with real storm data
-   - Collect feedback and testimonials
+## Production Architecture
 
-2. **Manual Data Entry** ($0)
-   - For first customers, manually enter property data
-   - Focus on Huntsville/Dekalb County regions (sample data ready)
-
-### Phase 3: Scaling (Month 2+)
-**Goal**: Scale to 50+ customers with automated systems
-
-1. **Automated Data Integration**
-   - Full NOAA API integration running on schedule
-   - Property data partnerships (Estated API when budget allows)
-
-2. **Enhanced Infrastructure**
-   - Separate database instance (AWS RDS free tier)
-   - Load balancing and redundancy
-
-## 🛠️ Technical Deployment Plan
-
-### Current Stack (Development)
-```
-Frontend: Next.js (port 3003)
-Backend: NestJS (port 4000)
-Database: PostgreSQL + PostGIS (Docker)
-Authentication: JWT
-Maps: OpenStreetMap + MapLibre
-```
-
-### Production Deployment Architecture
 ```
 Internet
     ↓
-eavesight.app (DNS)
+eavesight.com (Vercel DNS)
     ↓
-Nginx Reverse Proxy
-    ├── /api/* → Backend (port 4000)
-    └── /* → Frontend (port 3000)
-    ↓
-Docker Compose (Single Instance)
-    ├── Frontend Service (Next.js)
-    ├── Backend Service (NestJS)
-    └── Database Service (PostgreSQL + PostGIS)
+    ├── /                → Vercel (Next.js SSR + static)
+    └── /api/*           → Backend VPS (nginx → NestJS on :4000)
+                              ├─ Postgres (managed)
+                              └─ Redis (managed) → BullMQ workers
 ```
 
-### Deployment Commands
+### Key environment variables
+
+| Var | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection (with `?connection_limit=25&pool_timeout=20`) |
+| `REDIS_URL` | Redis connection for cache + BullMQ |
+| `JWT_SECRET` | Session signing |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | **Pending** — billing not yet wired |
+| `SKIP_TRACE_API_KEY` | **Pending** — owner phone/email enrichment |
+| `ROOF_MEASUREMENT_API_KEY` | **Pending** — EagleView/Roofr/Nearmap |
+| `NEXT_PUBLIC_API_URL` | Frontend → backend base URL |
+| `NEXT_PUBLIC_MAP_STYLE_URL` | MapLibre style (OSM-based) |
+
+## Deployment Flow
+
+### Frontend (Vercel)
+
+Push to `main` → Vercel auto-deploys. Manual deploy:
+
 ```bash
-# Build and deploy
-git clone https://github.com/yourusername/eavesight.git
-cd eavesight
-
-# Update environment variables
-cp .env.example .env.production
-# Edit .env.production with production settings
-
-# Start services
-docker-compose -f docker-compose.prod.yml up -d
-
-# Setup nginx reverse proxy
-# Configure SSL with Let's Encrypt
+cd apps/frontend
+vercel --prod
 ```
 
-## 📈 Monetization Strategy
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for full Vercel setup.
 
-### Initial Pricing (First 100 Customers)
-1. **Starter Plan**: $29/month (limited features, 500 properties)
-2. **Professional Plan**: $99/month (full features, 5000 properties)
-3. **Enterprise Plan**: $299/month (unlimited, API access)
+### Backend (VPS)
 
-### Revenue Projections with $100 Investment
-- **Week 1**: Deployment complete, 0 revenue
-- **Week 2**: 5 beta customers at $0 = $0
-- **Week 3**: 10 customers at $29-$99 = $290-$990
-- **Week 4**: 25 customers at $29-$99 = $725-$2,475
+```bash
+# On the VPS
+cd /opt/eavesight/Eavesight
+git pull
+cd apps/backend
+npm ci
+npx prisma migrate deploy
+npx prisma generate
+npm run build
+pm2 restart ecosystem.config.js
+```
 
-### Break-even Analysis
-- **Costs**: $15 (domain) + $0 (hosting) = $15
-- **Revenue Week 3**: $290-$990
-- **Break-even**: End of Week 3
+`ecosystem.config.js` runs the API + worker processes. Logs in `logs/`.
 
-## 🎯 Customer Acquisition Strategy
+### Database migrations
 
-### Target Market
-1. **Primary**: Residential roofing contractors in storm-prone states
-   - Alabama, Florida, Texas, Oklahoma, Colorado
-2. **Secondary**: Insurance adjusters and property managers
+Always run `npx prisma migrate deploy` (not `migrate dev`) in production. Migrations live in `apps/backend/prisma/migrations/`. Recent migrations:
 
-### Outreach Channels (Free/Low-cost)
-1. **Facebook Groups**: Local roofing contractor communities
-2. **Reddit**: r/roofing, r/smallbusiness
-3. **LinkedIn**: Direct messaging roofing company owners
-4. **Local Chambers of Commerce**: Partnership inquiries
-5. **Trade Shows**: Virtual attendance and networking
+- `20260422020000_pin_card_roof_age_source` — denormalized roof-age source on pin cards
+- `20260421170000_add_roof_installed_at` — roof-install anchor column
+- `20260420120000_viewport_indexes` — bbox/score composite indexes for viewport queries
+- `20260420000000_metros_hex_pincard` — scale-ready Metro + PropertyHexAggregate + PropertyPinCard
+- `20260419120000_add_unified_score` — unified 0-100 score columns
 
-### Beta Customer Value Proposition
-1. Free 30-day trial with full access
-2. Personal onboarding call
-3. Custom property data for their service area
-4. Priority support during beta period
+## Scale Plan
 
-## 🔄 Alternative Deployment Options
+### Now through Nashville launch (Months 1-10)
 
-### Option 1: Render.com ($7/month)
-- Hobby plan for web services
-- Free PostgreSQL database tier
-- Custom domain support
-- Built-in SSL
+- Single VPS + managed Postgres/Redis is sufficient through ~200K API requests/day
+- Postgres at ~3-5 GB; expected to hit ~8 GB after Nashville ingest
+- Vercel Pro for frontend (analytics, higher build limits, commercial use)
 
-### Option 2: Railway.app ($5/month)
-- Developer-friendly deployment
-- Free PostgreSQL add-on
-- Automatic HTTPS
-- GitHub integration
+### Year-end (Month 12) projected load
 
-### Option 3: Self-hosted VPS ($10/month)
-- DigitalOcean $6/month droplet
-- Complete control over environment
-- Can host multiple applications
-- Full root access
+- 500 total users, ~235 paying, ~2K map-sessions/day
+- Still well within single-Postgres headroom; add read replica when `EXPLAIN` timings regress
 
-## 📊 Success Metrics
+### Year 2+ (multi-metro, >1K paying users)
 
-### Weekly Tracking
-1. Website visitors (Google Analytics - free)
-2. Signup conversions (registration to paid)
-3. Customer feedback and feature requests
-4. Storm data processing success rate
-5. Lead generation accuracy
+- Promote Postgres to primary + read replica
+- BullMQ workers split into dedicated worker nodes
+- PMTiles export pipeline for hex aggregates moves to object storage + CDN (already scaffolded)
+- Consider partitioning `property_storms` by date (nightly-hot vs archival)
 
-### Monthly Goals (First 3 Months)
-1. **Month 1**: 25 customers, $500 MRR
-2. **Month 2**: 50 customers, $1,500 MRR
-3. **Month 3**: 100 customers, $3,500 MRR
+## Known Deployment Gaps
 
-## 🆘 Risk Mitigation
+Tracked against the business plan and data audit:
 
-### Technical Risks
-1. **NOAA API Changes**: Monitor for breaking changes, maintain backup data sources
-2. **Map Service Limits**: Implement caching, consider MapTiler alternative
-3. **Database Growth**: Monitor storage, plan migration path
+1. **Stripe billing** — `Organization.stripeCustomerId` unused; tier enforcement not live. Needs webhook handler + subscription lifecycle.
+2. **Property-reveal meter** — the metered unit of value (Scout 5 / Business 50 / Pro 200 / Enterprise unlimited) has no backing ledger. Must be built before paid launch.
+3. **Roof-measurement credit ledger** — same issue, same priority, separate ledger.
+4. **Skip-trace pipeline** — zero owner phones/emails in DB; needs API + nightly backfill.
+5. **Backup / DR** — document the restore procedure; currently only nightly pg_dump to object storage.
 
-### Business Risks
-1. **Slow Customer Acquisition**: Diversify outreach channels, offer referral incentives
-2. **Competition Emerges**: Focus on superior UX and customer service
-3. **Cash Flow Issues**: Maintain lean operations, reinvest profits
+## Customer Acquisition
 
-## 🚀 Next Steps
+### Primary channel (Huntsville)
 
-1. **Domain Registration** (Today): $15 for eavesight.app
-2. **Production Repository Setup** (Today): GitHub with CI/CD
-3. **Deployment Configuration** (Tomorrow): Docker and nginx setup
-4. **Beta Customer Outreach** (This Week): Contact 25 contractors
-5. **Launch Announcement** (Week 2): Social media and industry forums
+- Landing-page promo: **first 100 users get 3 months free** (currently live)
+- Direct outreach to Huntsville/Madison County roofing contractors
+- Facebook roofing-contractor groups
+- Local chambers + trade associations
 
-This strategy ensures we can deploy with your $100 investment while maintaining flexibility to scale as revenue grows.
+### Secondary (Nashville, launch +6 months)
+
+- Nashville waitlist opens on landing page during ingest phase
+- Launch promo tied to first-100-users-in-Nashville
+- Partnership channel: material suppliers (GAF, Owens Corning), NRCA, Jobber/Housecall Pro integrations
+
+## Success Metrics
+
+Pulled from the business plan; targets updated to reflect live pricing.
+
+| Metric | Target (Year 1) |
+|---|---|
+| Monthly churn | < 3% |
+| CAC | < $100 |
+| LTV | > $2,000 |
+| LTV:CAC | > 3:1 |
+| Time to first value | < 7 days |
+| Exit MRR (Month 12) | ~$42K |
+| Exit ARR run-rate | ~$500K |
+
+See `BUSINESS_PLAN.md § Financial Projections` for full monthly ramp and assumptions.

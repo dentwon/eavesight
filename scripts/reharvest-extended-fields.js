@@ -12,13 +12,13 @@
 const { Pool } = require('pg');
 const https = require('https');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 
 const SOURCES = [
   {
     name: 'Madison',
     county: 'Madison',
-    url: 'https://web3.kcsgis.com/kcsgis/rest/services/Madison/AL47_GAMAWeb/MapServer/141/query',
+    url: 'https://web3.kcsgis.com/kcsgis/rest/services/Madison/Madison_Public_ISV/MapServer/185/query',
     pageSize: 1000,
     rejectUnauthorized: false,
     outFields: 'PIN,ParcelNum,Acres,DeedDate,TotalAppraisedValue,TotalAssessedValue,TotalBuildingValue,TotalLandValue',

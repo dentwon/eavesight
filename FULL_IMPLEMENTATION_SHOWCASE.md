@@ -1,164 +1,111 @@
 # Eavesight Full Implementation Showcase
 
-## 🎯 Current Status
+**Updated: April 2026**
 
-**Fully Functional Prototype** with real NOAA data integration, property database, lead management, and interactive mapping - all working with zero additional cost beyond the $100 seed money for deployment.
+## Current Status
 
-## 🏗️ Technical Implementation
+**Live, in closed beta.** The MVP is running with real production data, not samples. All core features are wired end-to-end: storm intelligence, property search, owner info, lead management, canvassing, mobile bottom-sheet, metro-scoped map views, and multi-tier pin cards.
+
+## Technical Implementation
 
 ### Backend (NestJS API)
-- **Real NOAA Storm Data Integration** - Fetching actual public storm events
-- **Property Database** - Sample data with storm associations
-- **Lead Management System** - Complete CRUD operations with status tracking
-- **Authentication** - JWT-based secure access
-- **REST API** - Comprehensive endpoints for all functionality
+- **Storm ingest** — 2.1M historical storm events from SPC (Storm Prediction Center), 1950-present, nationwide. Types: WIND (1.12M), HAIL (845K), TORNADO (147K), plus FLOOD and HURRICANE.
+- **Property database** — 242,987 properties across Madison, Limestone, Morgan, Marshall, and Jackson counties (North Alabama). 100% geocoded, 100% with building footprints (Microsoft OSM dataset).
+- **Property ↔ storm linking** — 6,586,732 historical matches; average ~27 storms of exposure per property.
+- **Hail exposure index** — MRMS-derived per-property hail event count and severity; 70,830 properties with any hail exposure.
+- **Parcel layer** — 174,026 raw Madison County parcels with owner name, mailing address, appraised value, subdivision, deed book/page.
+- **Permit layer** — 30,417 Huntsville building permits (2003-2026), 97% geocoded, 58% linked to properties.
+- **Enrichment** — census tract, block group, ACS median household income, homeownership rate, median year built on 98-100% of properties.
+- **Lead scoring** — unified 0-100 score (emitted nightly), urgency / revenue-potential / opportunity / solar sub-scores, dormant-flag signal, claim-window timing.
+- **Scale-ready aggregates** — H3 hex aggregation (resolutions 6 and 8) for fast map-tile rendering; pin-card denormalization (Free + Pro payload variants) per property; metro registry for multi-metro expansion.
+- **Auth** — JWT sessions, org multi-tenancy with owner/admin/member/viewer roles, per-org API keys and quota tables (schema in place; billing wiring pending).
+- **Prisma + PostgreSQL + PostGIS**, Redis for cache/queues, BullMQ for the nightly score-collapse + hex-rebuild jobs.
 
-### Frontend (Next.js Web App)
-- **Interactive Dashboard** - Map-based interface with real-time data
-- **Lead Management UI** - Visual pipeline for tracking prospects
-- **Property Search** - Location-based property discovery
-- **Analytics Dashboard** - Performance metrics and insights
-- **Responsive Design** - Works on desktop and mobile devices
+### Frontend (Next.js 14 + MapLibre GL)
+- **Landing page** — public marketing site with live pricing, FAQ, "see your area free" CTA, beta promo banner
+- **Map dashboard** — viewport-aware pin loading (backend returns only the pins visible at the current zoom), hex-aggregate overlay at low zoom, per-property pin cards with Free vs Pro tier payloads, hail exposure overlay
+- **Property list / prospects / leads / pipeline / canvassing / analytics / alerts / team / settings** — all built, all live
+- **Mobile** — dedicated bottom-sheet flow for property details and pin-to-lead autofill
+- **Metro-scoped routes** — `/m/[metro]` routing already in place for Huntsville; second-metro (Nashville) drops in without UI changes once data is ingested
 
-## 🚀 Live Demonstration
+## Services
 
-### Services Running
-- **Backend API**: http://localhost:4000
-- **Frontend Web App**: http://localhost:3003
-- **Database**: PostgreSQL with PostGIS (local Docker)
+- **Landing / app** — eavesight.com (production)
+- **Backend API** — Nest app with Prisma + Redis + BullMQ workers
+- **Database** — PostgreSQL 14 with PostGIS, local dev on port 5433
 
-### Key API Endpoints Working
-1. `POST /api/auth/login` - User authentication
-2. `GET /api/storms/active` - Current storm events
-3. `GET /api/properties` - Property search
-4. `GET /api/leads` - Lead management
-5. `GET /api/leads/stats` - Performance metrics
+## Live Data Snapshot (as of 2026-04-22)
 
-### Sample Data Available
-- **Properties**: 50+ sample properties in Huntsville, AL area
-- **Storm Events**: Real NOAA data from 2024-2025
-- **Leads**: 8 sample leads with various statuses
-- **Organizations**: Demo organization with full access
+| Table | Rows | Notes |
+|---|---|---|
+| storm_events | 2,115,226 | SPC, nationwide, 1950-2026 |
+| property_storms | 6,586,732 | AL properties × historical storms |
+| properties | 242,987 | 5 North Alabama counties |
+| building_footprints | 242,987 | 100% coverage, Microsoft |
+| property_enrichments | 242,987 | census-level, 98%+ coverage |
+| property_pin_cards | 242,987 | Free + Pro payload denorm |
+| madison_parcel_data | 174,026 | raw Huntsville parcels |
+| building_permits | 30,417 | Huntsville + CoC, 2003-2026 |
+| property_hex_aggregates | 4,660 | H3 R6 + R8 |
+| contractor_licenses | 185 | Huntsville |
 
-## 💰 Monetization Ready
+## Pricing (live)
 
-### Immediate Revenue Opportunities
-1. **Subscription Model** - $49-499/month tiered pricing
-2. **Pay-per-Lead** - $10-50 per qualified lead generated
-3. **Enterprise Licensing** - Custom solutions for large contractors
+- **Scout** — Free. 5 property reveals/month, county-wide alerts, basic property data.
+- **Business** — $99/month. 50 reveals/month, zip-code alerts, Hot/Warm/Cold lead tiers, 1-county map, 1 canvassing route/day, owner name + mailing address, 5 roof-measurement credits.
+- **Pro** — $249/month *(featured, "Most Popular")*. 200 reveals/month, property-level push alerts, full 0-100 lead scoring, multi-county access, unlimited canvassing routes, owner name + phone + mailing, non-weather leads (roof age, home sales), 15 roof-measurement credits.
+- **Enterprise** — Talk to Sales. Unlimited reveals, API access, custom scoring, territory locking, team routing + GPS, 40 roof-measurement credits, priority support.
 
-### $100 Deployment Budget Allocation
-- **Domain Registration**: $15/year (eavesight.app recommended)
-- **Hosting**: Vercel free tier initially, upgrade as needed ($0-25/month)
-- **Database**: Supabase/AWS RDS free tier ($0-10/month)
-- **Analytics**: Plausible/Mixpanel free tier ($0-20/month)
-- **Marketing**: Initial customer outreach ($30-50)
+All paid plans: 14-day free trial, no per-user fees, no contract.
 
-### Target Markets
-1. **Residential Roofing Contractors** - Small to medium businesses
-2. **Commercial Roofing Companies** - Larger operations with fleets
-3. **Insurance Adjusters** - Property damage assessment professionals
-4. **Property Managers** - Multi-unit portfolio managers
+**Live promo:** First 100 users get 3 months free (banner on landing page).
 
-## 🛠️ Implementation Details
+**Unit of value:** metered **property reveals** (1 reveal = full owner + contact + property + storm profile for one address). Pro at $249 is anchored against "1 closed job = 56× monthly cost."
 
-### NOAA Storm Data Integration
-```bash
-# Real public data from NOAA's bulk download system
-# No API keys or paid services required
-# Automatic sync of storm events from 2024-2025
-# Geospatial data with lat/lon coordinates
-```
+## Target Markets
 
-### Property Database Structure
-```sql
--- Properties with:
--- Address information
--- Geospatial coordinates (PostGIS)
--- Year built and roof age estimation
--- Storm event associations
--- Lead connections
-```
+1. **Residential roofing contractors** (primary) — solo roofers and small crews ($500K-5M annual revenue, 3-15 employees)
+2. **Storm restoration companies** (Pro / Enterprise)
+3. **Multi-crew roofing operations** (Enterprise — territory locking, team routing, GPS)
 
-### Lead Management Pipeline
-```
-NEW → CONTACTED → QUALIFIED → QUOTED → WON/LOST
-```
+## Geographic Coverage
 
-### Interactive Mapping Features
-- **OpenStreetMap** base layers
-- **Storm event markers** with severity indicators
-- **Property pins** with roof age information
-- **Lead locations** with status colors
-- **Geospatial queries** for proximity searches
+- **Live metro:** Huntsville / North Alabama (Madison, Limestone, Morgan — Huntsville/Athens/Decatur; Marshall and Jackson also loaded)
+- **Storm data:** nationwide
+- **Next metro:** Nashville (Davidson / Williamson / Rutherford / Sumner / Wilson CAD pulls queued)
+- **Further expansion:** broader Southeast storm belt
 
-## 📊 Business Metrics Ready
+## Lead Pipeline
 
-### Key Performance Indicators
-- Lead conversion rates (currently 13% in sample data)
-- Storm detection accuracy
-- Property coverage in target markets
-- Customer lifetime value projections
+`NEW → CONTACTED → APPOINTMENT → INSPECTED → QUALIFIED → QUOTED → NEGOTIATING → WON / LOST`
 
-### Analytics Dashboard
-- Revenue tracking
-- Lead pipeline visualization
-- Geographic opportunity mapping
-- Team performance metrics
+Activities (call, email, SMS, visit, inspection, quote, note, status change) attach to both leads and properties. Canvass sessions track doors knocked / answered / leads generated per rep.
 
-## 🚀 Next Steps for Deployment
+## Known Gaps (see DATA_AUDIT_GAP_ANALYSIS.md for full detail)
 
-### With $100 Seed Money:
-1. **Domain Registration** ($15) - eavesight.app
-2. **Vercel Deployment** ($0-25) - Frontend hosting
-3. **Database Hosting** ($0-10) - Supabase or AWS free tier
-4. **Analytics Setup** ($0-20) - Plausible or Mixpanel free tier
-5. **Initial Marketing** ($30-50) - Outreach to local contractors
+1. **Owner phone/email: 0 rows** across 243K properties — skip-trace integration needed before outreach is TCPA-credible
+2. **Roof data (material, pitch, facets, squares, cost estimates): empty table** — the keystone differentiator vs HailTrace/Telefi
+3. **Property-reveal meter + roof-measurement credit ledger** not yet implemented in DB — no way to enforce the tiered quotas the pricing sells
+4. **Stripe billing not wired** — orgs have no `stripeCustomerId`, API usage/quota tables empty
+5. **Nashville data** not yet ingested
+6. **Storm path polygons** not stored (points only) — limits tornado/wind swath overlays
 
-### Timeline to Revenue:
-- **Week 1**: Deploy with sample data
-- **Week 2**: Acquire first 3-5 beta customers
-- **Week 3**: Process first paid leads
-- **Month 1**: $500-1000 in initial revenue
+## Competitive Position
 
-## 📈 Revenue Projections
+| Competitor | Cost | What Eavesight adds |
+|---|---|---|
+| HailTrace | $500+/mo | Integrates owner + property + permit + roof-age (they don't have this) |
+| Telefi | $300+/mo | Integrates storm + roof-age (they don't have this) |
+| SalesRabbit | $200+/mo | Roof-specific data, storm integration, lead scoring built around roof age |
+| AccuLynx | $400+/mo | 60% lower price, roofer-focused (not general contractor), faster onboarding |
 
-### Conservative Estimates (First 6 Months)
-- Month 1: 10 customers × $49 = $490 MRR
-- Month 2: 25 customers × $99 = $2,475 MRR
-- Month 3: 50 customers × $149 = $7,450 MRR
-- Month 6: 100 customers × $149 = $14,900 MRR
+## Next Steps
 
-### Aggressive Estimates (First Year)
-- Month 12: 300 customers × $149 = $44,700 MRR
-- Annual Revenue: $536,400 ARR
+Short list, in order (see DATA_AUDIT_GAP_ANALYSIS.md § 4 for full priority ladder):
 
-## 🎯 Competitive Advantages
-
-### Zero Competition in Niche
-- Most roofing contractors still use manual research methods
-- No existing platforms combine storm data with lead management
-- Unique value proposition with immediate ROI for customers
-
-### Technical Advantages
-- Real NOAA data (not simulated)
-- Automated data processing (no manual entry)
-- Scalable architecture (ready for growth)
-- Open-source friendly (minimal ongoing costs)
-
-### Business Model Strengths
-- High-value customers (contractors spend $1000s on leads)
-- Recurring revenue (subscription model)
-- Low churn potential (essential business tool)
-- Network effects (more users = more valuable data)
-
-## 📞 Call to Action
-
-This implementation is **ready for immediate deployment** with your $100 seed money. The only remaining steps are:
-
-1. Register domain name (eavesight.app recommended)
-2. Deploy to cloud hosting (Vercel + Supabase)
-3. Begin customer outreach to roofing contractors
-4. Process first paid leads within 2-3 weeks
-
-The technology, data integration, and business model are all proven and working. This represents a rare opportunity to launch a profitable SaaS business with minimal investment and maximum potential return.
+1. Wire skip-trace (Endato / BatchSkipTracing / Telnyx) → populate `ownerPhone` / `ownerEmail`; load federal DNC registry into `dnc_entries`
+2. Load at least one roof data source into `roof_data` (EagleView / Roofr / Nearmap / GeoX, or geometry-based estimator)
+3. Build the property-reveal meter and roof-measurement credit ledger; connect Stripe billing to `Organization.stripeCustomerId`
+4. Queue Nashville CAD ingestion
+5. Run the existing permit `is_roofing` classifier (column exists; nothing has populated it)
+6. Convert beta cohort to paid Business / Pro tiers

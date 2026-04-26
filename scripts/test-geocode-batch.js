@@ -5,7 +5,7 @@ const { Client } = require('pg');
 const https = require('https');
 const FormData = require('form-data');
 
-const PG_CONFIG = { host:'localhost', port:5433, database:'stormvault', user:'stormvault', password:'stormvault' };
+const PG_CONFIG = { host:'localhost', port:5433, database:'eavesight', user:'eavesight', password:'eavesight' };
 
 function escapeCsvField(s) {
   if (!s) return '';

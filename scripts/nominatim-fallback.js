@@ -7,7 +7,7 @@
 const { Client } = require('pg');
 const https = require('https');
 
-const PG = { host: 'localhost', port: 5433, database: 'stormvault', user: 'stormvault', password: process.env.DB_PASSWORD || 'stormvault' };
+const PG = { host: 'localhost', port: 5433, database: 'eavesight', user: 'eavesight', password: process.env.DB_PASSWORD || 'eavesight' };
 
 const PAUSE_MS = 1100; // 1 req/sec with buffer
 const BATCH_UPDATE = 500;
@@ -72,7 +72,7 @@ function geocodeNominatim(addr) {
     const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
     const req = https.get(url, {
       headers: {
-        'User-Agent': 'StormVault-Roofing/1.0 (dentwon@stormvault.com)',
+        'User-Agent': 'Eavesight-Roofing/1.0 (dentwon@eavesight.com)',
         'Accept': 'application/json',
       }
     }, res => {

@@ -1,4 +1,4 @@
-// StormVault Prisma Schema
+// Eavesight Prisma Schema
 
 generator client {
   provider        = "prisma-client-js"

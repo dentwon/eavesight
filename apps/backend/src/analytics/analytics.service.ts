@@ -330,11 +330,26 @@ export class AnalyticsService {
         const [propCount, oppRows, leadCount] = await Promise.all([
           this.prisma.property.count({ where: { zip: { in: zips } } }),
           this.prisma.$queryRawUnsafe<any[]>(
+            // High-urgency = canonical roof age >= 15yr. Mirrors
+            // estimateRoofAge() in leads/roof-age.util.ts:
+            //  - roofInstalledAt anchor if present (>35yr -> unknown, excluded)
+            //  - otherwise yearBuilt mod-22 (only hits 15+ when yearBuilt yields
+            //    modular residual >=15, which is the intended semantic).
             `SELECT COUNT(*)::int AS high_urgency
              FROM properties
              WHERE zip = ANY($1::text[])
-               AND "yearBuilt" IS NOT NULL
-               AND (2026 - "yearBuilt") >= 15`,
+               AND (
+                 ("roofInstalledAt" IS NOT NULL
+                   AND (2026 - EXTRACT(YEAR FROM "roofInstalledAt")::int) BETWEEN 15 AND 35)
+                 OR ("roofInstalledAt" IS NULL
+                   AND "yearBuilt" IS NOT NULL
+                   AND (
+                     CASE
+                       WHEN (2026 - "yearBuilt") >= 22 THEN (2026 - "yearBuilt") % 22
+                       ELSE (2026 - "yearBuilt")
+                     END
+                   ) >= 15)
+               )`,
             zips,
           ),
           this.prisma.lead.count({

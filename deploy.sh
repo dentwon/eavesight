@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# StormVault Deployment Script
+# Eavesight Deployment Script
 
-echo "StormVault Deployment Script"
+echo "Eavesight Deployment Script"
 echo "============================"
 
 # Check if we're in the right directory
 if [ ! -f "package.json" ]; then
-  echo "Error: This script must be run from the StormVault root directory"
+  echo "Error: This script must be run from the Eavesight root directory"
   exit 1
 fi
 

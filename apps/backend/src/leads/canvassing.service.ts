@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { estimateRoofAge, RoofAgeSource } from './roof-age.util';
 
 @Injectable()
 export class CanvassingService {
@@ -102,10 +103,12 @@ export class CanvassingService {
           property.lat!, property.lon!,
         );
 
-        let roofAge: number | null = roofData?.age ?? null;
-        if (!roofAge && property.yearBuilt) {
-          roofAge = new Date().getFullYear() - property.yearBuilt;
-        }
+        // Shared helper: caps at ROOF_AGE_MAX_YEARS, uses mod-life inference
+        // if no measured age, always returns a source enum so the UI can
+        // distinguish "we measured this" from "we guessed this".
+        const roofAgeEst = estimateRoofAge(property);
+        const roofAge = roofAgeEst.age;
+        const roofAgeSource = roofAgeEst.source;
 
         return {
           order: index + 1,
@@ -129,6 +132,7 @@ export class CanvassingService {
 
           yearBuilt: property.yearBuilt,
           roofAge,
+          roofAgeSource,
           roofMaterial: roofData?.material || null,
           estimatedRoofSqft: roofData?.totalAreaSqft || null,
           estimatedJobValue: roofData?.estimatedTotalCost || null,
@@ -198,6 +202,7 @@ export interface CanvassingItem {
   lon: number | null;
   yearBuilt: number | null;
   roofAge: number | null;
+  roofAgeSource: RoofAgeSource;
   roofMaterial: string | null;
   estimatedRoofSqft: number | null;
   estimatedJobValue: number | null;

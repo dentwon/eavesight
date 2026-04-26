@@ -2,7 +2,7 @@
 const { Pool } = require('pg');
 const https = require('https');
 
-const DB = { host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault' };
+const DB = { host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight' };
 const BASE = 'https://madisonproperty.countygovservices.com/Property/Property/Details';
 const CONCURRENCY = 1;
 const DELAY = 3000;

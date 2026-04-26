@@ -20,6 +20,7 @@ interface CanvassingItem {
   zip: string;
   yearBuilt: number | null;
   roofAge: number | null;
+  roofAgeSource: 'measured' | 'coc' | 'permit' | 'inferred' | 'unknown';
   roofMaterial: string | null;
   estimatedRoofSqft: number | null;
   estimatedJobValue: number | null;
@@ -288,8 +289,17 @@ export default function CanvassingPage() {
                         <p className="text-gray-500 font-medium mb-1">Property</p>
                         {item.yearBuilt && <p>Built: {item.yearBuilt}</p>}
                         {item.roofAge !== null && (
-                          <p className={item.roofAge >= 20 ? 'text-red-600 font-semibold' : ''}>
-                            Roof age: {item.roofAge} yrs
+                          <p
+                            className={
+                              item.roofAge >= 20 && (item.roofAgeSource === 'measured' || item.roofAgeSource === 'coc' || item.roofAgeSource === 'permit')
+                                ? 'text-red-600 font-semibold'
+                                : item.roofAge >= 20
+                                  ? 'text-red-500'
+                                  : ''
+                            }
+                            title={item.roofAgeSource === 'inferred' ? 'Estimated from year built' : undefined}
+                          >
+                            Roof age: {item.roofAge} yrs{item.roofAgeSource === 'inferred' ? ' (est.)' : ''}
                           </p>
                         )}
                         {item.roofMaterial && <p>Material: {item.roofMaterial}</p>}

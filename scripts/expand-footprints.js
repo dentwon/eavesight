@@ -18,26 +18,29 @@ const { streamArray } = require('stream-json/streamers/stream-array.js');
 const { chain } = require('stream-chain');
 const { createReadStream } = require('fs');
 
-// Expanded North Alabama metro bounding box
+// 5-county North-Alabama metro: Madison + Limestone + Morgan + Marshall + Jackson.
+// 2026-04-24: enlarged east+south to capture Marshall (Albertville/Boaz/Guntersville)
+// and Jackson (Scottsboro/Stevenson) which were previously cut off.
 const BBOX = {
+  minLat: 34.10,
+  maxLat: 35.00,
+  minLon: -87.20,
+  maxLon: -85.50,
+};
+
+// All previously-imported bounds — used to skip duplicates by region.
+// Includes Huntsville-only and the original expanded box.
+const OLD_BBOX = {
   minLat: 34.45,
   maxLat: 34.95,
   minLon: -87.10,
   maxLon: -86.25,
 };
 
-// Original bounds (skip these — already imported)
-const OLD_BBOX = {
-  minLat: 34.55,
-  maxLat: 34.90,
-  minLon: -86.85,
-  maxLon: -86.35,
-};
-
 const BATCH_SIZE = 500;
 const GEOJSON_FILE = '/home/dentwon/Eavesight/data/footprints/Alabama.geojson';
 
-const pool = new Pool({ host:'localhost', port:5433, user:'stormvault', password:'stormvault', database:'stormvault', max:4 });
+const pool = new Pool({ host:'localhost', port:5433, user:'eavesight', password:'eavesight', database:'eavesight', max:4 });
 
 function computeCentroid(coords) {
   const ring = coords[0];
