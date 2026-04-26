@@ -8,10 +8,11 @@ out/
 dist/
 build/
 
-# Environment files
+# Environment files — NEVER commit any .env*, regardless of suffix.
+# Only .env.example (documented placeholders) is allowed in git.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # IDE
 .vscode/
