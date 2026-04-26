@@ -67,10 +67,23 @@ export class TracerfyService {
 
     const address = `${property.address}, ${property.city}, ${property.state} ${property.zip}`;
 
+    // Pick the cheaper Tracerfy tier when we already know the owner name.
+    // Normal Trace = $0.02/record (requires owner name + address).
+    // Advanced Trace = $0.04/record (address-only fallback).
+    // We have ownerFullName for ~97% of properties via county assessor scrapes,
+    // so the default path is the $0.02 tier. Halves dominant per-reveal cost.
+    const useNormalTrace = !!property.ownerFullName;
+    const traceType = useNormalTrace ? 'normal' : 'advanced';
+    const costCents = useNormalTrace ? 2 : 4;
+
+    const tracePayload: Record<string, any> = useNormalTrace
+      ? { addresses: [address], names: [property.ownerFullName], trace_type: 'normal' }
+      : { addresses: [address], trace_type: 'advanced' };
+
     try {
       const response = await axios.post(
         `${this.baseUrl}/trace/`,
-        { addresses: [address], trace_type: 'advanced' },
+        tracePayload,
         {
           headers: {
             Authorization: `Bearer ${this.apiKey}`,
@@ -80,8 +93,8 @@ export class TracerfyService {
         },
       );
 
-      // Track usage
-      await this.trackUsage(orgId, propertyId, requestedBy, 4); // $0.04
+      // Track usage at the actual price billed by Tracerfy ($0.02 Normal / $0.04 Advanced).
+      await this.trackUsage(orgId, propertyId, requestedBy, costCents);
 
       const result = response.data as any;
       if (result.queue_id) {
