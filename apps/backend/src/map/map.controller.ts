@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MapService, MapLayer } from './map.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -32,8 +32,8 @@ export class MapController {
   }
 
   @Get('pmtiles/:pmtiles_id/property')
-  @ApiOperation({ summary: 'Get property by PMTiles ID' })
-  async getPropertyByPmtilesId(@Param('pmtiles_id') pmtilesId: string) {
-    return this.mapService.getPropertyByPmtilesId(pmtilesId);
+  @ApiOperation({ summary: 'Get property by PMTiles ID — leads scoped to caller org' })
+  async getPropertyByPmtilesId(@Param('pmtiles_id') pmtilesId: string, @Req() req: any) {
+    return this.mapService.getPropertyByPmtilesId(pmtilesId, req.user?.orgId ?? null);
   }
 }

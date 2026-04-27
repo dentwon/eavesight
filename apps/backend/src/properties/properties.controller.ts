@@ -4,6 +4,7 @@ import { Throttle } from '@nestjs/throttler';
 import { PropertiesService } from './properties.service';
 import { PropertyEnrichmentService } from '../data-pipeline/property-enrichment.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 import { SearchPropertiesDto } from './dto/search-properties.dto';
 import { LookupPropertyDto } from './dto/lookup-property.dto';
 import { RevealMeterService } from './reveal-meter.service';
@@ -56,7 +57,7 @@ export class PropertiesController {
   }
 
   @Post(':id/reveal')
-  @ApiOperation({ summary: 'Unmask owner PII for a property — consumes 1 reveal from quota (free if same property already revealed this period)' })
+  @ApiOperation({ summary: 'Unmask owner PII for a property — consumes 1 reveal from quota' })
   reveal(@Req() req: any, @Param('id') id: string) {
     return this.propertiesService.findOne(id, { orgId: req.user?.orgId, userId: req.user?.id }, true);
   }
@@ -68,7 +69,7 @@ export class PropertiesController {
   }
 
   @Post('lookup')
-  @ApiOperation({ summary: 'Quick property lookup by address' })
+  @ApiOperation({ summary: 'Quick property lookup by address — returns masked fields only' })
   lookup(@Body() lookupDto: LookupPropertyDto) {
     return this.propertiesService.lookup(lookupDto);
   }
@@ -80,8 +81,9 @@ export class PropertiesController {
   }
 
   @Post(':id/enrich')
+  @Roles('SUPER_ADMIN')
   @Throttle({ expensive: { ttl: 60_000, limit: 5 } })
-  @ApiOperation({ summary: 'Enrich property with Census/FEMA public data' })
+  @ApiOperation({ summary: 'Enrich property with Census/FEMA public data (super-admin only)' })
   enrichProperty(@Param('id') id: string) {
     return this.enrichmentService.enrichProperty(id);
   }
@@ -93,8 +95,9 @@ export class PropertiesController {
   }
 
   @Post('enrich-all')
+  @Roles('SUPER_ADMIN')
   @Throttle({ expensive: { ttl: 60_000, limit: 1 } })
-  @ApiOperation({ summary: 'Batch enrich unenriched properties (admin-only — heavy)' })
+  @ApiOperation({ summary: 'Batch enrich unenriched properties (super-admin only — heavy)' })
   enrichAll(@Body() body?: { limit?: number }) {
     return this.enrichmentService.enrichAllProperties(body?.limit || 20);
   }

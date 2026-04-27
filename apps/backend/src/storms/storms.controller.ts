@@ -6,6 +6,7 @@ import { NoaaService } from './noaa.service';
 import { SpcService } from './spc.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
+import { Roles } from '../auth/roles.decorator';
 import { GetStormsDto } from './dto/get-storms.dto';
 
 @ApiTags('storms')
@@ -47,18 +48,20 @@ export class StormsController {
     return this.stormsService.getStormZones(state, limit ? parseInt(limit) : 100);
   }
 
-  // --- Sync Endpoints (manual triggers) ---
+  // --- Sync Endpoints (manual triggers — SUPER_ADMIN only, hits NOAA/SPC API quotas) ---
 
   @Post('sync/spc')
+  @Roles('SUPER_ADMIN')
   @Throttle({ expensive: { ttl: 60_000, limit: 2 } })
-  @ApiOperation({ summary: 'Manually sync today\'s SPC storm reports' })
+  @ApiOperation({ summary: 'Manually sync today\'s SPC storm reports (super-admin only)' })
   syncSpc() {
     return this.spcService.syncToday();
   }
 
   @Post('sync/spc/history')
+  @Roles('SUPER_ADMIN')
   @Throttle({ expensive: { ttl: 60_000, limit: 1 } })
-  @ApiOperation({ summary: 'Sync SPC historical data for a date range' })
+  @ApiOperation({ summary: 'Sync SPC historical data for a date range (super-admin only)' })
   syncSpcHistory(@Body() body: { startDate: string; endDate: string }) {
     return this.spcService.syncDateRange(
       new Date(body.startDate),
@@ -67,8 +70,9 @@ export class StormsController {
   }
 
   @Post('sync/noaa')
+  @Roles('SUPER_ADMIN')
   @Throttle({ expensive: { ttl: 60_000, limit: 1 } })
-  @ApiOperation({ summary: 'Manually sync NOAA historical storm data' })
+  @ApiOperation({ summary: 'Manually sync NOAA historical storm data (super-admin only)' })
   syncNoaa(@Body() body?: { state?: string; years?: number[]; limit?: number }) {
     return this.noaaService.syncStormEvents({
       state: body?.state,
@@ -100,9 +104,7 @@ export class StormsController {
 
   @Public()
   @Get('tracks')
-  @ApiOperation({
-    summary: 'Get storm trajectories (LineStrings) within bbox for last N months',
-  })
+  @ApiOperation({ summary: 'Get storm trajectories (LineStrings) within bbox for last N months' })
   getTracks(
     @Query('north') north: string,
     @Query('south') south: string,
@@ -124,9 +126,7 @@ export class StormsController {
 
   @Public()
   @Get('swaths')
-  @ApiOperation({
-    summary: 'Storm damage footprints (polygon swaths + centerlines + points) for rich map rendering',
-  })
+  @ApiOperation({ summary: 'Storm damage footprints (polygon swaths + centerlines + points) for rich map rendering' })
   getSwaths(
     @Query('north') north: string,
     @Query('south') south: string,

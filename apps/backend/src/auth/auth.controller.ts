@@ -23,7 +23,6 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  @ApiResponse({ status: 409, description: 'Email already exists' })
   async register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
@@ -42,25 +41,47 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Begin Google OAuth flow (redirects to Google)' })
   async googleAuth() {
-    // Passport handles the redirect to Google's consent screen.
+    // Passport handles redirect to Google's consent screen.
   }
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth callback — issues our JWT tokens' })
+  @ApiOperation({ summary: 'Google OAuth callback — issues our JWT tokens via httpOnly cookies' })
   async googleCallback(@Req() req: any, @Res() res: Response) {
     const result = await this.authService.loginWithGoogleProfile(req.user);
-    const frontendUrl = this.configService.get<string>('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000';
-    // Hand tokens back to the frontend via a one-shot URL fragment so they
-    // never appear in server access logs. Frontend page reads them and stores.
-    const params = new URLSearchParams({
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
+    const frontendUrl =
+      this.configService.get<string>('NEXT_PUBLIC_APP_URL') || 'http://localhost:3000';
+
+    // Tokens go back as httpOnly cookies (NOT in the URL fragment) — fragment
+    // delivery exposes tokens to any in-page JS, browser extensions, and to
+    // Referer leaks if the destination page loads cross-origin resources
+    // before clearing the hash. JS cannot read httpOnly cookies, which means
+    // an XSS bug doesn't immediately exfiltrate session tokens.
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookieDomain = isProd ? '.eavesight.com' : undefined;
+
+    res.cookie('eavesight_access', result.accessToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      domain: cookieDomain,
+      maxAge: 15 * 60 * 1000,
+      path: '/',
     });
-    res.redirect(`${frontendUrl}/auth/oauth-complete#${params.toString()}`);
+    res.cookie('eavesight_refresh', result.refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      domain: cookieDomain,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.redirect(`${frontendUrl}/auth/oauth-complete`);
   }
 
   @Post('refresh')
+  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
@@ -74,17 +95,19 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'User logout' })
-  @ApiResponse({ status: 200, description: 'Logout successful' })
-  async logout(@Req() req: any) {
-    return this.authService.logout(req.user.id);
+  async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.logout(req.user.id);
+    const isProd = process.env.NODE_ENV === 'production';
+    const cookieDomain = isProd ? '.eavesight.com' : undefined;
+    res.clearCookie('eavesight_access', { domain: cookieDomain, path: '/' });
+    res.clearCookie('eavesight_refresh', { domain: cookieDomain, path: '/' });
+    return result;
   }
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user' })
-  @ApiResponse({ status: 200, description: 'User profile retrieved' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async me(@Req() req: any) {
     return this.authService.me(req.user.id);
   }

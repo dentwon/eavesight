@@ -55,6 +55,17 @@ export class StripeService {
       this.logger.warn('STRIPE_SECRET_KEY not set — billing endpoints will return 503 until configured.');
       this.stripe = null;
     } else {
+      // If the secret key is set we MUST also have a webhook secret. Otherwise
+      // every webhook hits InternalServerErrorException at runtime, which
+      // Stripe interprets as a transient failure and retries forever. Fail
+      // boot loudly instead.
+      if (!this.webhookSecret) {
+        throw new Error(
+          'STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is not. ' +
+          'Refusing to boot — webhook signature verification would always fail. ' +
+          'Set STRIPE_WEBHOOK_SECRET or unset STRIPE_SECRET_KEY.',
+        );
+      }
       this.stripe = new Stripe(apiKey, { apiVersion: '2025-01-27.acacia' as any });
     }
   }
@@ -78,22 +89,50 @@ export class StripeService {
    */
   async ensureCustomer(orgId: string, email: string, orgName: string): Promise<string> {
     const stripe = this.requireStripe();
-    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
-    if (!org) throw new BadRequestException('Organization not found');
-    if (org.stripeCustomerId) return org.stripeCustomerId;
+    const existing = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { id: true, stripeCustomerId: true },
+    });
+    if (!existing) throw new BadRequestException('Organization not found');
+    if (existing.stripeCustomerId) return existing.stripeCustomerId;
 
+    // Concurrent /checkout calls from the same org would otherwise create
+    // two Stripe customers and the second .update() would orphan the first.
+    // Create the Stripe customer first, then atomically commit it only if
+    // no other request beat us to it. If a race occurred, we delete our
+    // freshly-created customer and return the winner's id.
     const customer = await stripe.customers.create({
       email,
       name: orgName,
       metadata: { orgId },
     });
 
-    await this.prisma.organization.update({
-      where: { id: orgId },
-      data: { stripeCustomerId: customer.id },
+    const committed = await this.prisma.$transaction(async (tx) => {
+      const fresh = await tx.organization.findUnique({
+        where: { id: orgId },
+        select: { stripeCustomerId: true },
+      });
+      if (fresh?.stripeCustomerId) {
+        return { winner: fresh.stripeCustomerId, ours: false as const };
+      }
+      await tx.organization.update({
+        where: { id: orgId },
+        data: { stripeCustomerId: customer.id },
+      });
+      return { winner: customer.id, ours: true as const };
     });
 
-    return customer.id;
+    if (!committed.ours) {
+      // We lost the race. Garbage-collect the orphan Stripe customer so we
+      // don't leak duplicates into the Stripe Dashboard.
+      try {
+        await stripe.customers.del(customer.id);
+      } catch (err) {
+        this.logger.warn(`Failed to delete orphan Stripe customer ${customer.id}: ${(err as Error)?.message}`);
+      }
+    }
+
+    return committed.winner;
   }
 
   /**

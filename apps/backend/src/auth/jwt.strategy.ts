@@ -15,9 +15,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new Error('JWT_SECRET environment variable must be set');
     }
     super({
-      jwtFromRequest: ExtractJwt.fromExtractors([ExtractJwt.fromAuthHeaderAsBearerToken(), (req: any) => (req?.query?.token as string) ?? null]),
+      // Header-only. Query-string extractors leak JWTs into Cloudflare/
+      // nginx access logs and Referer headers to third parties — never
+      // accept tokens via URL params.
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: secret,
+      algorithms: ['HS256'],
+      issuer: 'eavesight',
+      audience: 'eavesight-api',
     });
   }
 
@@ -45,7 +51,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    // Attach primary organization ID
     const orgId = user.organizationMemberships?.[0]?.organizationId || null;
 
     return {

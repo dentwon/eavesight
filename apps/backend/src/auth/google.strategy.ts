@@ -24,6 +24,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret,
       callbackURL: `${apiUrl}/auth/google/callback`,
       scope: ['email', 'profile'],
+      // CSRF-protect the OAuth dance. passport-google-oauth20 generates a
+      // session-keyed state value on /auth/google and verifies it on
+      // /auth/google/callback. Without this, an attacker can complete OAuth
+      // in their browser and trick a victim into landing on the callback,
+      // signing the victim into the attacker's account.
+      state: true,
     });
     if (!clientID || !clientSecret) {
       this.logger.warn(

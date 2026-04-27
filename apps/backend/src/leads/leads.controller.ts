@@ -1,10 +1,12 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { LeadsService } from './leads.service';
 import { LeadScoringService } from './lead-scoring.service';
 import { LeadGeneratorService } from './lead-generator.service';
 import { CanvassingService } from './canvassing.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OrgRoles } from '../auth/roles.decorator';
 import { CreateLeadDto, UpdateLeadDto } from './dto';
 
 @ApiTags('leads')
@@ -56,13 +58,22 @@ export class LeadsController {
   }
 
   @Post('score-all')
-  @ApiOperation({ summary: 'Re-score all leads for organization' })
+  @OrgRoles('OWNER', 'ADMIN')
+  @Throttle({ expensive: { ttl: 60_000, limit: 2 } })
+  @ApiOperation({ summary: 'Re-score all leads for organization (org admin only — heavy)' })
   scoreAll(@Request() req: any) {
     return this.scoringService.scoreAllLeads(req.user.orgId);
   }
 
+  // TODO(security): generator services currently don't receive orgId — they
+  // write leads against whatever the service determines. Gating to org admins
+  // narrows the blast radius; a follow-up should plumb req.user.orgId through
+  // LeadGeneratorService so generated leads are guaranteed to belong to the
+  // caller's org.
   @Post('generate')
-  @ApiOperation({ summary: 'Generate leads from recent storms' })
+  @OrgRoles('OWNER', 'ADMIN')
+  @Throttle({ expensive: { ttl: 60_000, limit: 2 } })
+  @ApiOperation({ summary: 'Generate leads from recent storms (org admin only — heavy)' })
   generateFromStorms(
     @Request() req: any,
     @Body() body: { days?: number },
@@ -71,7 +82,9 @@ export class LeadsController {
   }
 
   @Post('generate/:stormId')
-  @ApiOperation({ summary: 'Generate leads from a specific storm' })
+  @OrgRoles('OWNER', 'ADMIN')
+  @Throttle({ expensive: { ttl: 60_000, limit: 2 } })
+  @ApiOperation({ summary: 'Generate leads from a specific storm (org admin only — heavy)' })
   generateFromStorm(
     @Param('stormId') stormId: string,
     @Body() body: { radiusKm?: number },
@@ -104,7 +117,7 @@ export class LeadsController {
   }
 
   @Patch(':id/assign')
-  @ApiOperation({ summary: 'Assign lead to user' })
+  @ApiOperation({ summary: 'Assign lead to user — assignee must belong to caller org' })
   assign(@Param('id') id: string, @Body() body: { assigneeId: string }, @Request() req: any) {
     return this.leadsService.assign(id, req.user.orgId, body.assigneeId);
   }
@@ -116,7 +129,8 @@ export class LeadsController {
   }
 
   @Post('bulk')
-  @ApiOperation({ summary: 'Bulk create leads' })
+  @OrgRoles('OWNER', 'ADMIN')
+  @ApiOperation({ summary: 'Bulk create leads (org admin only)' })
   bulkCreate(@Body() body: { leads: CreateLeadDto[] }, @Request() req: any) {
     return this.leadsService.bulkCreate(req.user.orgId, body.leads);
   }

@@ -47,9 +47,11 @@ export class MapService {
   }
 
   /**
-   * Get property by PMTiles ID
+   * Get property by PMTiles ID. Leads are scoped to the caller's org —
+   * we never include other tenants' lead names/phones/emails. If no orgId
+   * is provided (anonymous / public route), no leads are returned.
    */
-  async getPropertyByPmtilesId(pmtilesId: string): Promise<any | null> {
+  async getPropertyByPmtilesId(pmtilesId: string, orgId: string | null): Promise<any | null> {
     const numericId = parseInt(pmtilesId);
 
     const rows = await this.prisma.$queryRawUnsafe<{propertyId: string}[]>(
@@ -63,7 +65,7 @@ export class MapService {
       where: { id: rows[0].propertyId },
       include: {
         propertyStorms: { include: { stormEvent: true } },
-        leads: true,
+        leads: orgId ? { where: { orgId } } : false,
         roofData: true,
         buildingFootprint: true,
       },

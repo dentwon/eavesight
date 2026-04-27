@@ -4,28 +4,12 @@ import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '../auth/public.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OrgRoles } from '../auth/roles.decorator';
 import { PLANS, PLAN_ORDER_LIST } from './plan-list';
 import { RevealMeterService } from '../properties/reveal-meter.service';
 import { StripeService } from './stripe.service';
 import { PlanCode } from '../common/plans';
 
-/**
- * BillingController — Stripe-integrated.
- *
- * Public endpoints:
- *   - GET  /billing/plans      public plan catalog
- *   - POST /billing/webhook    Stripe → us (signature-verified)
- *
- * Authed endpoints:
- *   - GET  /billing/usage      current org's billing-period usage
- *   - POST /billing/checkout   start a Stripe Checkout session
- *   - POST /billing/portal     get a Stripe Customer Portal URL
- *
- * If STRIPE_SECRET_KEY is unset (current state on the VM until cloud
- * migration), the Stripe-touching endpoints return 503 with a clear
- * "Stripe not configured" message instead of crashing. /plans + /usage
- * keep working regardless.
- */
 @ApiTags('billing')
 @Controller('billing')
 export class BillingController {
@@ -55,8 +39,9 @@ export class BillingController {
 
   @Post('checkout')
   @UseGuards(JwtAuthGuard)
+  @OrgRoles('OWNER', 'ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a Stripe Checkout session for a paid plan' })
+  @ApiOperation({ summary: 'Create a Stripe Checkout session — owner/admin only' })
   async checkout(
     @Req() req: any,
     @Body() body: { planCode: PlanCode; billingCycle?: 'monthly' | 'annual' },
@@ -84,8 +69,9 @@ export class BillingController {
 
   @Post('portal')
   @UseGuards(JwtAuthGuard)
+  @OrgRoles('OWNER', 'ADMIN')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get the Stripe Customer Portal URL for managing subscription' })
+  @ApiOperation({ summary: 'Get the Stripe Customer Portal URL — owner/admin only' })
   async portal(@Req() req: any) {
     if (!this.stripeService.isConfigured()) {
       throw new HttpException(
@@ -113,25 +99,29 @@ export class BillingController {
     @Res() res: Response,
   ) {
     if (!this.stripeService.isConfigured()) {
-      // Quietly accept the webhook so Stripe doesn't retry, but log + 503.
-      // In prod this should fail loudly; in dev/staging without Stripe wired
-      // we'd rather not get retry storms.
+      // Quietly accept the webhook so Stripe doesn't retry storms.
       return res.status(503).json({ message: 'Stripe not configured' });
     }
     if (!signature) {
       return res.status(400).json({ message: 'Missing Stripe signature header' });
     }
     if (!req.rawBody) {
-      return res.status(400).json({
-        message: 'Raw body unavailable. Ensure NestJS bootstrap uses { rawBody: true }.',
-      });
+      // Should never hit this with NestFactory.create(AppModule, { rawBody: true }).
+      return res.status(500).json({ message: 'Server misconfigured: rawBody unavailable' });
     }
     try {
       const result = await this.stripeService.handleWebhook(req.rawBody, signature);
       return res.status(200).json(result);
     } catch (err: any) {
       const status = err?.status || 500;
-      return res.status(status).json({ message: err?.message || 'webhook error' });
+      // Never echo the raw error message to the world — could leak internals.
+      const message =
+        status === 400
+          ? 'Invalid Stripe signature'
+          : status >= 500
+            ? 'webhook handler failed'
+            : err?.message || 'webhook error';
+      return res.status(status).json({ message });
     }
   }
 }

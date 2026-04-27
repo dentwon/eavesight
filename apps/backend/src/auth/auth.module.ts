@@ -9,21 +9,32 @@ import { GoogleStrategy } from './google.strategy';
 
 @Module({
   imports: [
-    PassportModule.register({ defaultStrategy: 'jwt' }),
+    PassportModule.register({ defaultStrategy: 'jwt', session: false }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
         const secret = configService.get<string>('JWT_SECRET');
         if (!secret) {
-          // Hard-fail boot rather than silently use a placeholder secret.
-          // Was previously falling back to 'default-secret-change-me' which
-          // would forge any user's JWT in a misconfigured environment.
           throw new Error('JWT_SECRET environment variable must be set');
+        }
+        if (secret.length < 32) {
+          throw new Error('JWT_SECRET must be at least 32 characters');
         }
         return {
           secret,
+          // Pin signing AND verification to HS256 to defeat algorithm-confusion
+          // attacks (e.g. an attacker submitting `alg: "none"` or RS256-with-
+          // public-key-as-HS-secret tokens).
           signOptions: {
+            algorithm: 'HS256',
             expiresIn: configService.get('JWT_EXPIRES_IN') || '15m',
+            issuer: 'eavesight',
+            audience: 'eavesight-api',
+          },
+          verifyOptions: {
+            algorithms: ['HS256'],
+            issuer: 'eavesight',
+            audience: 'eavesight-api',
           },
         };
       },

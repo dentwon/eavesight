@@ -8,6 +8,17 @@ import { LoginDto } from './dto/login.dto';
 import { Prisma } from '@prisma/client';
 import { GoogleOAuthProfile } from './google.strategy';
 
+/**
+ * AuthService.
+ *
+ * Refresh tokens are stored in the DB only as SHA-256 hashes — the original
+ * token string only exists in transit and in client storage. A DB read leak
+ * therefore yields hashes, not bearer credentials. (See `hashRefreshToken`.)
+ *
+ * Token rotation: every successful refresh deletes the old session row and
+ * issues a new one. A future enhancement (token-family / replay detection)
+ * is gated on an additional `tokenFamily` column.
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -18,53 +29,41 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     const { email, password, firstName, lastName, organizationName } = registerDto;
 
-    // Check if user exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
 
+    // Account-enumeration mitigation: do NOT reveal that an email is taken
+    // here. Bail with the same generic shape as a successful pre-registration
+    // step would produce. The legitimate user will hit "your account already
+    // exists, did you mean to log in?" via a separate password-reset / email
+    // verification flow (TODO: implement). Returning {success: true} prevents
+    // the existence oracle that an attacker can use for credential stuffing
+    // targeting.
     if (existingUser) {
-      throw new ConflictException('Email already registered');
+      // Constant-time-ish — still hash a throwaway password so the timing
+      // signature roughly matches the create branch. Not perfect, but
+      // closes the most obvious oracle.
+      await bcrypt.hash(password, 12);
+      return {
+        message: 'If this email is available, your account has been created. Check your inbox.',
+      };
     }
 
-    // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Create user and organization in a transaction
     const result = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Create user
       const user = await tx.user.create({
-        data: {
-          email,
-          passwordHash,
-          firstName,
-          lastName,
-        },
+        data: { email, passwordHash, firstName, lastName },
       });
-
-      // Create organization
       const org = await tx.organization.create({
-        data: {
-          name: organizationName || `${firstName || 'User'}'s Roofing`,
-        },
+        data: { name: organizationName || `${firstName || 'User'}'s Roofing` },
       });
-
-      // Add user to organization as owner
       await tx.organizationMember.create({
-        data: {
-          userId: user.id,
-          organizationId: org.id,
-          role: 'OWNER',
-        },
+        data: { userId: user.id, organizationId: org.id, role: 'OWNER' },
       });
-
       return { user, org };
     });
 
-    // Generate tokens
     const tokens = await this.generateTokens(result.user.id);
-
-    // Save session
     await this.saveSession(result.user.id, tokens.refreshToken);
 
     return {
@@ -83,7 +82,6 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    // Find user
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: {
@@ -95,23 +93,20 @@ export class AuthService {
     });
 
     if (!user || !user.passwordHash) {
+      // Run a dummy bcrypt to avoid a timing oracle on email existence.
+      await bcrypt.compare(password, '$2b$12$0123456789012345678901234567890123456789012345678901a');
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Get primary organization
     const orgId = user.organizationMemberships?.[0]?.organizationId || null;
 
-    // Generate tokens
     const tokens = await this.generateTokens(user.id);
-
-    // Save session
     await this.saveSession(user.id, tokens.refreshToken);
 
     return {
@@ -129,10 +124,11 @@ export class AuthService {
 
   async refresh(refreshTokenDto: { refreshToken: string }) {
     const { refreshToken } = refreshTokenDto;
+    const tokenHash = this.hashRefreshToken(refreshToken);
 
-    // Find session
+    // The DB only stores hashed refresh tokens; lookup by hash, not by raw.
     const session = await this.prisma.session.findUnique({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
       include: { user: true },
     });
 
@@ -140,15 +136,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    // Delete old session
-    await this.prisma.session.delete({
-      where: { id: session.id },
-    });
+    await this.prisma.session.delete({ where: { id: session.id } });
 
-    // Generate new tokens
     const tokens = await this.generateTokens(session.user.id);
-
-    // Save new session
     await this.saveSession(session.user.id, tokens.refreshToken);
 
     return {
@@ -163,14 +153,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * OAuth (Google) login. Two paths:
-   *  - existing user with this email → log them in (link Google to that account)
-   *  - no existing user → create a new user + new org, no password set
-   *
-   * Until the schema migration that adds User.googleId, we link purely on email.
-   * After migration, swap the lookup to googleId and fall back to email.
-   */
   async loginWithGoogleProfile(profile: GoogleOAuthProfile) {
     if (!profile?.email) {
       throw new UnauthorizedException('Google account did not return an email');
@@ -190,10 +172,6 @@ export class AuthService {
     let orgId: string | null;
 
     if (!user) {
-      // First-time OAuth user — create user + org in one transaction.
-      // Generate an un-knowable random passwordHash placeholder so the
-      // password-login path can never authenticate this account. (After the
-      // schema migration that makes passwordHash nullable, this becomes null.)
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const passwordHash = await bcrypt.hash(randomPassword, 12);
 
@@ -209,16 +187,10 @@ export class AuthService {
           },
         });
         const org = await tx.organization.create({
-          data: {
-            name: `${profile.firstName || 'New'}'s Roofing`,
-          },
+          data: { name: `${profile.firstName || 'New'}'s Roofing` },
         });
         await tx.organizationMember.create({
-          data: {
-            userId: newUser.id,
-            organizationId: org.id,
-            role: 'OWNER',
-          },
+          data: { userId: newUser.id, organizationId: org.id, role: 'OWNER' },
         });
         return { user: newUser, org };
       });
@@ -226,7 +198,6 @@ export class AuthService {
       orgId = result.org.id;
     } else {
       orgId = user.organizationMemberships?.[0]?.organizationId || null;
-      // Mark email verified now that Google has confirmed it.
       if (!user.emailVerified) {
         await this.prisma.user.update({
           where: { id: user.id },
@@ -251,11 +222,7 @@ export class AuthService {
   }
 
   async logout(userId: string) {
-    // Delete all sessions for user
-    await this.prisma.session.deleteMany({
-      where: { userId },
-    });
-
+    await this.prisma.session.deleteMany({ where: { userId } });
     return { message: 'Logged out successfully' };
   }
 
@@ -271,8 +238,10 @@ export class AuthService {
         emailVerified: true,
         createdAt: true,
         organizationMemberships: {
-          include: {
-            organization: true,
+          select: {
+            id: true,
+            role: true,
+            organization: { select: { id: true, name: true, plan: true } },
           },
         },
       },
@@ -283,6 +252,15 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  /**
+   * Cryptographic hash of the refresh token stored in DB. SHA-256 is fine
+   * here — the input is already 256 bits of randomness from JWT signing,
+   * so we don't need bcrypt's slowness.
+   */
+  private hashRefreshToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
   }
 
   private async generateTokens(userId: string) {
@@ -297,15 +275,16 @@ export class AuthService {
   }
 
   private async saveSession(userId: string, refreshToken: string) {
+    const tokenHash = this.hashRefreshToken(refreshToken);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
     await this.prisma.session.upsert({
-      where: { token: refreshToken },
+      where: { token: tokenHash },
       update: { userId, expiresAt },
       create: {
         userId,
-        token: refreshToken,
+        token: tokenHash,
         expiresAt,
       },
     });

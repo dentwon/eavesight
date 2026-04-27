@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../common/prisma.service';
 
@@ -8,10 +8,13 @@ import { PrismaService } from '../common/prisma.service';
  * Responsibilities:
  *   1. matchWarningToProperties — given an NWS warning polygon, bulk-insert
  *      PropertyAlert rows for every property geographically inside, then emit
- *      `property.alert` events that the SSE gateway fans out to connected users.
- *   2. earmark CRUD — user flags a property for later inspection, typically
- *      during an active warning. The earmarked list survives the storm.
+ *      `property.alert.batch` events that the SSE gateway fans out.
+ *   2. earmark CRUD — user flags a property for later inspection. Earmarks
+ *      are partitioned per-org: a different org's user cannot overwrite or
+ *      clear another org's earmark on the same property.
  *   3. active + recent alert queries — power the dashboard banners + map layer.
+ *   4. SSE batch filtering — only emit to a connection the properties whose
+ *      alerts actually concern that org (lead-matched OR territory-zip match).
  */
 @Injectable()
 export class AlertsService {
@@ -22,14 +25,6 @@ export class AlertsService {
     private readonly emitter: EventEmitter2,
   ) {}
 
-  /**
-   * Given a warning polygon (GeoJSON geometry), create PropertyAlert rows for
-   * every property whose point falls inside. Returns the count of new alerts.
-   *
-   * Idempotent via UNIQUE(propertyId, stormEventId, alertType).
-   * Emits `property.alert.batch` once with the full batch so the SSE gateway
-   * can fan out without querying again.
-   */
   async matchWarningToProperties(opts: {
     stormEventId: string | null;
     alertType: 'TORNADO_WARNING' | 'SEVERE_TSTORM' | 'HAIL_CORE' | 'HIGH_WIND' | 'FLOOD';
@@ -43,7 +38,6 @@ export class AlertsService {
     const polygonStr = JSON.stringify(opts.polygonGeoJson);
     const metaStr = JSON.stringify(opts.metadata || {});
 
-    // First count to log, then insert — both with ST_Within on property points.
     const matches = await this.prisma.$queryRawUnsafe<any[]>(
       `
       SELECT p.id, p.lat, p.lon, p.address, p.city, p.zip
@@ -59,7 +53,6 @@ export class AlertsService {
 
     if (matches.length === 0) return { matched: 0, inserted: 0 };
 
-    // Insert in one batch. ON CONFLICT suppresses duplicates so repeat polls are safe.
     const inserted = await this.prisma.$executeRawUnsafe(
       `
       INSERT INTO property_alerts (id, "propertyId", "stormEventId", "alertType", "alertSource", severity, "startedAt", "expiresAt", active, metadata)
@@ -86,7 +79,6 @@ export class AlertsService {
       `PropertyAlert batch: ${inserted} inserted / ${matches.length} matched (type=${opts.alertType}, severity=${opts.severity})`,
     );
 
-    // Fan out to SSE subscribers regardless of dedupe — they may have just connected.
     this.emitter.emit('property.alert.batch', {
       alertType: opts.alertType,
       alertSource: opts.alertSource,
@@ -107,8 +99,64 @@ export class AlertsService {
     return { matched: matches.length, inserted: Number(inserted) };
   }
 
-  /** Flag / unflag a property for inspection. */
-  async setEarmark(propertyId: string, userId: string, reason: string | null) {
+  /**
+   * For SSE fan-out: take a batch of properties and return only those that
+   * concern `orgId` (a lead exists for that property in this org, OR the
+   * property's zip is in one of the org's active territories). Properties
+   * outside the org's interest are silently dropped — they would otherwise
+   * leak addresses, lat/lon, etc. cross-tenant.
+   */
+  async filterBatchForOrg(
+    orgId: string,
+    properties: Array<{ id: string; lat: number | null; lon: number | null; address: string | null; city: string | null; zip: string | null }>,
+  ): Promise<typeof properties> {
+    if (!properties.length) return [];
+    const ids = properties.map((p) => p.id).filter(Boolean);
+    if (!ids.length) return [];
+
+    const zips = Array.from(new Set(properties.map((p) => p.zip).filter((z): z is string => !!z)));
+
+    // Property IDs that this org has an active lead for.
+    const leadMatches = await this.prisma.lead.findMany({
+      where: { orgId, propertyId: { in: ids } },
+      select: { propertyId: true },
+    });
+    const leadIds = new Set(leadMatches.map((l) => l.propertyId).filter((id): id is string => !!id));
+
+    // Zip codes covered by an active territory for this org.
+    let territoryZips = new Set<string>();
+    if (zips.length) {
+      const territories = await this.prisma.$queryRawUnsafe<{ zipCodes: string[] }[]>(
+        `SELECT "zipCodes" FROM territories WHERE "orgId" = $1 AND "isActive" = true`,
+        orgId,
+      );
+      for (const t of territories) {
+        for (const z of t.zipCodes || []) territoryZips.add(z);
+      }
+    }
+
+    return properties.filter((p) => {
+      if (leadIds.has(p.id)) return true;
+      if (p.zip && territoryZips.has(p.zip)) return true;
+      return false;
+    });
+  }
+
+  /**
+   * Earmark a property for inspection. Per-org isolation: if the property is
+   * already earmarked by a user from a *different* org, refuse the mutation.
+   * Same-org users may overwrite each other's earmarks (collaborative).
+   */
+  async setEarmark(
+    propertyId: string,
+    userId: string,
+    orgId: string | null,
+    reason: string | null,
+  ) {
+    if (!orgId) {
+      throw new ForbiddenException('Earmark requires an organization context');
+    }
+    await this.assertEarmarkBelongsToCallerOrg(propertyId, orgId);
     return this.prisma.property.update({
       where: { id: propertyId },
       data: {
@@ -121,7 +169,11 @@ export class AlertsService {
     });
   }
 
-  async clearEarmark(propertyId: string) {
+  async clearEarmark(propertyId: string, userId: string, orgId: string | null) {
+    if (!orgId) {
+      throw new ForbiddenException('Clear-earmark requires an organization context');
+    }
+    await this.assertEarmarkBelongsToCallerOrg(propertyId, orgId);
     return this.prisma.property.update({
       where: { id: propertyId },
       data: {
@@ -134,7 +186,33 @@ export class AlertsService {
     });
   }
 
-  /** User's earmark worklist — all properties they've flagged, most recent first. */
+  /**
+   * If an existing earmark is held by a user from a different org, refuse.
+   * If unearmarked or held by a same-org user, allow.
+   *
+   * NOTE: this is a soft per-org partition layered onto a single global
+   * earmark column. Long-term fix is a per-org PropertyEarmark join table
+   * (planned in PENDING_MIGRATION_unify_plans_oauth_reveals.diff follow-up).
+   */
+  private async assertEarmarkBelongsToCallerOrg(propertyId: string, orgId: string): Promise<void> {
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { id: true, isEarmarked: true, earmarkedByUserId: true },
+    });
+    if (!property) throw new NotFoundException('Property not found');
+
+    if (!property.isEarmarked || !property.earmarkedByUserId) return;
+
+    // Look up the existing earmark holder's org membership.
+    const holder = await this.prisma.organizationMember.findFirst({
+      where: { userId: property.earmarkedByUserId },
+      select: { organizationId: true },
+    });
+    if (holder && holder.organizationId !== orgId) {
+      throw new ForbiddenException('Property is earmarked by another organization');
+    }
+  }
+
   async listEarmarks(userId: string, limit: number = 100) {
     return this.prisma.property.findMany({
       where: { earmarkedByUserId: userId, isEarmarked: true },
@@ -154,7 +232,6 @@ export class AlertsService {
     });
   }
 
-  /** Active alerts for an org — via its leads' properties. Lightweight poll target. */
   async getActiveAlertsForOrg(orgId: string, limit: number = 500) {
     return this.prisma.$queryRawUnsafe<any[]>(
       `
@@ -182,10 +259,6 @@ export class AlertsService {
     );
   }
 
-  /**
-   * Housekeeping: mark alerts expired when their NWS expiry is past.
-   * Called on a schedule from StormsProcessor, but also safe to call ad-hoc.
-   */
   async expireStaleAlerts() {
     const expired = await this.prisma.$executeRawUnsafe(
       `UPDATE property_alerts
