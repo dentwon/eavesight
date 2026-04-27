@@ -1,9 +1,14 @@
 /** @type {import('next').NextConfig} */
 
-// Security headers applied to every route. CSP is intentionally strict —
-// scripts must be same-origin or carry our nonce/hash; styles same-origin
-// (with 'unsafe-inline' for now until Tailwind/styled-jsx are nonced);
-// no <iframe> embedding (X-Frame-Options DENY).
+const isDev = process.env.NODE_ENV !== 'production';
+
+// Security headers applied to every route. CSP is environment-aware:
+// production drops `unsafe-eval` (Next.js 14 prod bundles don't need it —
+// only HMR/React Refresh in dev does). `unsafe-inline` for scripts stays
+// until middleware emits per-request nonces (planned follow-up).
+//
+// `form-action` includes only `'self'` — Stripe Checkout opens via
+// stripe.js client-side, no cross-origin form post needed.
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -22,10 +27,9 @@ const securityHeaders = [
       "default-src 'self'",
       "base-uri 'self'",
       "frame-ancestors 'none'",
-      "form-action 'self' https://checkout.stripe.com",
-      // Scripts: self + Stripe.js. 'unsafe-inline' kept temporarily for
-      // Next.js inline bootstrap; switch to nonce when middleware emits one.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com",
+      "form-action 'self'",
+      // Scripts: self + Stripe.js. `unsafe-eval` only in dev (HMR).
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''} https://js.stripe.com`,
       // Styles: 'unsafe-inline' until styled-jsx + Tailwind use nonces.
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",

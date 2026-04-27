@@ -22,7 +22,7 @@ export default function LoginPage() {
 
     try {
       const response = await authApi.login({ email, password });
-      setAuth(response.user, response.accessToken, response.refreshToken);
+      setAuth(response.user);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password');

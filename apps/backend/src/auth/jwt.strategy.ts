@@ -2,7 +2,21 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import type { Request } from 'express';
 import { PrismaService } from '../common/prisma.service';
+
+/**
+ * Extract the access JWT from either the `eavesight_access` httpOnly cookie
+ * (preferred — not exfil-able via XSS) OR the standard `Authorization: Bearer …`
+ * header (for non-browser clients). Cookie takes precedence when both are
+ * present so a browser with a stale localStorage token doesn't silently
+ * outvote the live cookie.
+ */
+function extractFromRequest(req: Request): string | null {
+  const cookieToken = (req as any)?.cookies?.eavesight_access;
+  if (typeof cookieToken === 'string' && cookieToken) return cookieToken;
+  return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,10 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new Error('JWT_SECRET environment variable must be set');
     }
     super({
-      // Header-only. Query-string extractors leak JWTs into Cloudflare/
-      // nginx access logs and Referer headers to third parties — never
-      // accept tokens via URL params.
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: extractFromRequest,
       ignoreExpiration: false,
       secretOrKey: secret,
       algorithms: ['HS256'],

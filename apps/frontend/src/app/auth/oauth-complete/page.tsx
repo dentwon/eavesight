@@ -6,10 +6,14 @@ import { useAuthStore } from '@/stores/auth';
 import api from '@/lib/api';
 
 /**
- * OAuth completion page. The backend's /auth/google/callback redirects here
- * with `accessToken` + `refreshToken` in the URL fragment (so they never hit
- * server access logs). We pick them up, fetch the user profile, save to the
- * auth store, then redirect to the dashboard.
+ * OAuth completion page. The backend's /auth/google/callback sets
+ * `eavesight_access` and `eavesight_refresh` httpOnly cookies before
+ * redirecting here. We just call /auth/me (the cookie is sent automatically
+ * via withCredentials) to populate the auth store, then redirect.
+ *
+ * No token parsing from the URL fragment — that flow exposed tokens to
+ * any in-page JS, browser extensions, and Referer leaks. Cookies are
+ * inaccessible to JS.
  */
 export default function OAuthCompletePage() {
   const router = useRouter();
@@ -18,34 +22,18 @@ export default function OAuthCompletePage() {
 
   useEffect(() => {
     const finish = async () => {
-      const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-      const params = new URLSearchParams(hash);
-      const accessToken = params.get('accessToken');
-      const refreshToken = params.get('refreshToken');
-      if (!accessToken || !refreshToken) {
-        setError('OAuth response was missing tokens. Please try signing in again.');
-        return;
-      }
       try {
-        const res = await api.get('/auth/me', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
+        const res = await api.get('/auth/me');
         const me = res.data;
         const orgId = me?.organizationMemberships?.[0]?.organizationId;
-        setAuth(
-          {
-            id: me.id,
-            email: me.email,
-            firstName: me.firstName,
-            lastName: me.lastName,
-            role: me.role,
-            orgId,
-          },
-          accessToken,
-          refreshToken,
-        );
-        // Clear the fragment so refresh doesn't re-process tokens
-        window.history.replaceState(null, '', '/auth/oauth-complete');
+        setAuth({
+          id: me.id,
+          email: me.email,
+          firstName: me.firstName,
+          lastName: me.lastName,
+          role: me.role,
+          orgId,
+        });
         router.replace('/dashboard');
       } catch (err: any) {
         setError(err?.response?.data?.message || 'Failed to complete sign-in');

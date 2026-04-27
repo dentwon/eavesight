@@ -76,11 +76,11 @@ export function useStormAlerts(options: { autoConnect?: boolean } = { autoConnec
   // Live stream
   useEffect(() => {
     if (!options.autoConnect || typeof window === 'undefined') return;
-    const token = localStorage.getItem('token');
-    // EventSource does NOT support custom headers — we pass token as query arg.
-    // The backend AuthGuard reads it off req.query.token as a fallback.
+    // EventSource sends cookies for same-origin (or with withCredentials
+    // for cross-origin). Auth comes from the eavesight_access httpOnly
+    // cookie set by /auth/login + /auth/refresh — no token in URL.
     const base = process.env.NEXT_PUBLIC_API_URL || '/api';
-    const url = `${base}/alerts/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+    const url = `${base}/alerts/stream`;
     let es: EventSource;
     try {
       es = new EventSource(url, { withCredentials: true });
