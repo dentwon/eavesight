@@ -149,6 +149,16 @@ export class LeadsService {
   async assign(id: string, orgId: string, assigneeId: string) {
     const lead = await this.findOne(id, orgId);
 
+    // Defense-in-depth: even if the controller is org-scoped, an admin
+    // shouldn't be able to assign a lead to a user from a different org.
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: { organizationId: orgId, userId: assigneeId },
+      select: { id: true },
+    });
+    if (!membership) {
+      throw new ForbiddenException('Assignee must be a member of this organization');
+    }
+
     return this.prisma.lead.update({
       where: { id: lead.id },
       data: {
@@ -169,10 +179,55 @@ export class LeadsService {
   }
 
   async bulkCreate(orgId: string, leads: CreateLeadDto[]) {
+    if (!Array.isArray(leads) || leads.length === 0) return { count: 0 };
+    if (leads.length > 1000) {
+      throw new ForbiddenException('Bulk create limited to 1000 leads per call');
+    }
+
+    // Validate cross-org references up front: every propertyId must exist,
+    // every assigneeId must be a member of this org. We deliberately do
+    // NOT trust spread `...lead` here — only whitelist-known fields are
+    // forwarded, so client-supplied `score`, `convertedAt`, `orgId`, etc.
+    // can't override our values.
+    const propertyIds = Array.from(
+      new Set(leads.map((l) => (l as any).propertyId).filter((id): id is string => !!id)),
+    );
+    if (propertyIds.length) {
+      const existing = await this.prisma.property.findMany({
+        where: { id: { in: propertyIds } },
+        select: { id: true },
+      });
+      if (existing.length !== propertyIds.length) {
+        throw new ForbiddenException('One or more propertyIds do not exist');
+      }
+    }
+
+    const assigneeIds = Array.from(
+      new Set(leads.map((l) => (l as any).assigneeId).filter((id): id is string => !!id)),
+    );
+    if (assigneeIds.length) {
+      const memberships = await this.prisma.organizationMember.findMany({
+        where: { organizationId: orgId, userId: { in: assigneeIds } },
+        select: { userId: true },
+      });
+      if (memberships.length !== assigneeIds.length) {
+        throw new ForbiddenException('One or more assigneeIds do not belong to this organization');
+      }
+    }
+
     const result = await this.prisma.lead.createMany({
-      data: leads.map((lead) => ({
-        ...lead,
+      data: leads.map((lead: any) => ({
         orgId,
+        propertyId: lead.propertyId ?? null,
+        parcelId: lead.parcelId ?? null,
+        firstName: lead.firstName ?? null,
+        lastName: lead.lastName ?? null,
+        email: lead.email ?? null,
+        phone: lead.phone ?? null,
+        source: lead.source ?? null,
+        notes: lead.notes ?? null,
+        tags: Array.isArray(lead.tags) ? lead.tags : [],
+        assigneeId: lead.assigneeId ?? null,
         status: 'NEW',
         priority: lead.priority || 'MEDIUM',
       })),

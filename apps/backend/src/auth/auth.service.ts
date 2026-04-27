@@ -7,6 +7,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { Prisma } from '@prisma/client';
 import { GoogleOAuthProfile } from './google.strategy';
+import { LoginLockoutService } from './login-lockout.service';
 
 /**
  * AuthService.
@@ -24,6 +25,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly lockout: LoginLockoutService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -82,6 +84,14 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
+    // Per-account lockout — defends against distributed credential stuffing.
+    // The @Throttle on /login is per-IP only; rotated IPs let an attacker
+    // try thousands of passwords against one email. This caps that.
+    const lockMs = this.lockout.isLocked(email);
+    if (lockMs > 0) {
+      throw new UnauthorizedException('Account temporarily locked. Try again later.');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: {
@@ -95,14 +105,18 @@ export class AuthService {
     if (!user || !user.passwordHash) {
       // Run a dummy bcrypt to avoid a timing oracle on email existence.
       await bcrypt.compare(password, '$2b$12$0123456789012345678901234567890123456789012345678901a');
+      this.lockout.recordFailure(email);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
+      this.lockout.recordFailure(email);
       throw new UnauthorizedException('Invalid credentials');
     }
+
+    this.lockout.recordSuccess(email);
 
     const orgId = user.organizationMemberships?.[0]?.organizationId || null;
 

@@ -174,10 +174,27 @@ export class PropertiesService {
     });
 
     if (!property) {
-      // Fall back to MadisonParcelData
+      // Fall back to MadisonParcelData. Whitelist fields explicitly — the
+      // raw row contains owner names + mailing addresses we don't surface
+      // outside the metered /reveal flow. Mirrors the masked field set
+      // used by findInBounds.
       const parcel = await this.prisma.madisonParcelData.findFirst({
         where: {
           propertyAddress: { contains: address.toUpperCase() },
+        },
+        select: {
+          // Identifiers + location only — owner names, mailing addresses,
+          // deed history are NOT returned. Those live behind /reveal.
+          pin: true,
+          propertyAddress: true,
+          zoning: true,
+          floodZone: true,
+          opportunityZone: true,
+          acres: true,
+          totalAppraisedValue: true,
+          totalBuildingValue: true,
+          lat: true,
+          lon: true,
         },
       });
       if (parcel) {
