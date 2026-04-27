@@ -1,0 +1,215 @@
+# Eavesight Security Audit — 2026-04-26
+
+Comprehensive code review across auth, billing, IDOR/authz, infra, and dependencies.
+**No live probing performed** — code review only. Production exposed via Cloudflare tunnel:
+- eavesight.com / www / app → `:3000` (Next.js)
+- api.eavesight.com → `:4000` (NestJS)
+
+## Scoring
+
+- **Critical**: data exposure, privilege escalation, or revenue-impacting silent bug
+- **High**: exploitable with effort, confidentiality/integrity impact
+- **Medium**: defense-in-depth, slower exploitation paths, or hardening gaps
+- **Low**: hygiene / hardening polish
+
+---
+
+## CRITICAL
+
+### C1 — Privilege escalation via PATCH /users/:id mass assignment
+- **File**: `apps/backend/src/users/users.service.ts:48-73` (called from `users.controller.ts:32`)
+- **Issue**: `prisma.user.update({ where: { id }, data: updateData })` with `updateData: any`. Any logged-in user can `PATCH /api/users/<self>` `{ "role": "SUPER_ADMIN" }` and self-promote. The `forbidNonWhitelisted` global pipe is defeated by the `any` typing.
+- **Fix**: Whitelist allowed fields server-side (`firstName`, `lastName`, `avatar`); strip `role`, `passwordHash`, `refreshToken`, `emailVerified`, `stripeCustomerId`, `orgId`. Type the parameter with the DTO.
+
+### C2 — DELETE /users/:id has no role guard
+- **File**: `apps/backend/src/users/users.controller.ts:39-41`, `users.service.ts:75-82`
+- **Issue**: Any authenticated user can delete any user, including SUPER_ADMIN.
+- **Fix**: `@Roles('ADMIN','SUPER_ADMIN')` + RolesGuard.
+
+### C3 — User directory enumeration via GET /users and GET /users/:id
+- **File**: `users.controller.ts:14-27`, `users.service.ts:8-46`
+- **Issue**: Returns all users, all roles, all `organizationMemberships` cross-org.
+- **Fix**: Restrict `findAll` to admins; restrict `findOne` to self or same-org membership; never include cross-org memberships.
+
+### C4 — Map property reveals all leads cross-org
+- **File**: `apps/backend/src/map/map.service.ts:62-71`
+- **Issue**: `GET /api/map/pmtiles/:id/property` returns `include: { leads: true }` with no `where: { orgId }`. Any authenticated user clicks any building and gets every other org's lead names, phones, emails for that property.
+- **Fix**: Pass `req.user.orgId` through and add `where: { orgId }` to the leads include.
+
+### C5 — Alerts SSE leaks all properties cross-org
+- **File**: `apps/backend/src/alerts/alerts.controller.ts:43-60`
+- **Issue**: SSE fan-out emits every alert batch to every connected user with full property address/lat/lon. Filter is client-side only.
+- **Fix**: Filter the batch server-side using `getActiveAlertsForOrg` logic (lead match or territory zip match).
+
+### C6 — Stripe webhook can never succeed (rawBody missing)
+- **File**: `apps/backend/src/main.ts:9`, `billing.controller.ts:108-112`
+- **Issue**: `NestFactory.create(AppModule)` called without `{ rawBody: true }`. Controller checks `req.rawBody` and 400s when absent. Every legit Stripe POST returns 400 → Stripe disables the endpoint after retries.
+- **Fix**: `NestFactory.create(AppModule, { rawBody: true })`.
+
+### C7 — Plan enum mismatch crashes every successful checkout webhook
+- **File**: `apps/backend/prisma/schema.prisma:80-84` defines `enum Plan { STARTER PROFESSIONAL ENTERPRISE }`; `apps/backend/src/billing/stripe.service.ts:179` writes `planCode ∈ { SCOUT, BUSINESS, PRO, ENTERPRISE }`.
+- **Issue**: Only `ENTERPRISE` succeeds. BUSINESS/PRO throws Prisma enum violation → webhook 500 → Stripe retries → customer charged but never upgraded.
+- **Fix**: Migrate enum to `{ SCOUT, BUSINESS, PRO, ENTERPRISE }`.
+
+---
+
+## HIGH
+
+### H1 — Earmark mutation cross-tenant
+- **File**: `alerts/alerts.controller.ts:62-76`, `alerts.service.ts:111-135`
+- **Issue**: `prisma.property.update` for `isEarmarked`/`earmarkedByUserId` has no org check. Org A can overwrite Org B's earmark or clear it via DELETE.
+- **Fix**: Move earmarks to a per-org join table `(orgId, propertyId)`, OR refuse the mutation when the existing earmark belongs to a different org.
+
+### H2 — Lead generation/score-all not org-scoped or admin-gated
+- **File**: `leads/leads.controller.ts:58-80`
+- **Issue**: `POST /api/leads/generate` does not pass `req.user.orgId`; any user triggers org-wide lead generation. `score-all` is not admin-gated.
+- **Fix**: Pass orgId to generator service; gate generator + score-all on ADMIN role; add `@Throttle({ expensive })`.
+
+### H3 — Storms sync endpoints + properties enrich-all not admin-gated
+- **File**: `storms.controller.ts:52-78`, `properties.controller.ts:95-101`, `:id/enrich`
+- **Issue**: Any user can trigger NOAA/SPC sync (writes global storm data, hits upstream API limits). Property enrichment is "admin-only" by comment only.
+- **Fix**: `@Roles('SUPER_ADMIN')` + RolesGuard.
+
+### H4 — JWT algorithm not pinned + accepted via ?token= query string
+- **File**: `auth/auth.module.ts:23-28`, `auth/jwt.strategy.ts:17-21`
+- **Issue**: No `algorithms: ['HS256']` on verify; `?token=` extractor leaks JWTs into CF/nginx logs and `Referer` headers.
+- **Fix**: Pin algorithm; remove query extractor; keep only `fromAuthHeaderAsBearerToken()`.
+
+### H5 — OAuth tokens delivered via URL fragment to localStorage
+- **File**: `auth/auth.controller.ts:48-61`
+- **Issue**: `/auth/oauth-complete#accessToken=...&refreshToken=...` → frontend stores in `localStorage`. XSS exfiltrates both. 7-day refresh token life.
+- **Fix**: Issue tokens as `Set-Cookie` with `HttpOnly; Secure; SameSite=Lax; Domain=.eavesight.com`.
+
+### H6 — OAuth `state` parameter missing → login CSRF
+- **File**: `auth/google.strategy.ts:22-27`
+- **Issue**: `passport-google-oauth20` does not auto-enable `state`. Attacker initiates OAuth, victim completes, victim signs into attacker's account.
+- **Fix**: `state: true` in strategy options + session middleware, OR signed state cookie.
+
+### H7 — Refresh tokens stored plaintext in DB
+- **File**: `auth/auth.service.ts:299-312, 134-137`
+- **Issue**: Anyone with read access to `Session` table (DB breach, ORM logs) gets working bearer credentials for every active user.
+- **Fix**: Store SHA-256 hash; look up by hash on refresh.
+
+### H8 — Stripe webhook idempotency missing
+- **File**: `billing/stripe.service.ts:128-160`
+- **Issue**: No `event.id` dedup. Stripe at-least-once delivery means replays re-grant entitlements.
+- **Fix**: `model ProcessedStripeEvent { id String @id, type String, receivedAt DateTime @default(now()) }`; insert-or-skip on entry.
+
+### H9 — Cancellation/refunds don't revoke access
+- **File**: `billing/stripe.service.ts:200-209, 147-160`
+- **Issue**: `markSubscriptionCanceled` only logs (DB update commented). `charge.refunded`, `charge.dispute.created` not handled.
+- **Fix**: On `customer.subscription.deleted` and `charge.refunded`, set `plan='SCOUT'`, `subscriptionStatus='CANCELED'`.
+
+### H10 — Trust proxy not set → throttler broken behind CF tunnel
+- **File**: `apps/backend/src/main.ts`
+- **Issue**: `req.ip` is `127.0.0.1` for all requests; ThrottlerGuard treats all traffic as one bucket. Single attacker DoSes the auth bucket for everyone.
+- **Fix**: `app.getHttpAdapter().getInstance().set('trust proxy', 'loopback')`; configure throttler `getTracker` to use `cf-connecting-ip`.
+
+### H11 — No Next.js security headers
+- **File**: `apps/frontend/next.config.js`
+- **Issue**: No `headers()` block. Missing CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, X-Content-Type-Options.
+- **Fix**: Add `async headers()` for `/(.*)` with strict defaults.
+
+### H12 — Next.js 14.1.0 multiple criticals (auth bypass, SSRF, DoS)
+- GHSA-f82v-jwr5-mffw (CVSS 9.1 auth bypass), GHSA-7gfc-8cq8-jh5f, GHSA-fr5h-rqp8-mj6g (SSRF), plus DoS chain.
+- **Fix**: Bump to **14.2.35** (non-breaking).
+
+### H13 — axios SSRF (NO_PROXY bypass + cloud metadata exfil)
+- GHSA-3p68-rc4w-qgx5, GHSA-fvcv-3m26-pcqx. Backend `^1.13.6`, frontend `^1.6.0`.
+- **Fix**: Bump both to `>=1.15.0`.
+
+### H14 — Properties /lookup leaks raw parcel including ownerName
+- **File**: `properties/properties.service.ts:157-192`
+- **Issue**: Returns `...parcel` spread with no field whitelist; `findInBounds` correctly masks.
+- **Fix**: Project the same masked field set.
+
+### H15 — Billing checkout/portal accept any member (incl MEMBER role)
+- **File**: `billing/billing.controller.ts:62, 89`
+- **Issue**: A junior teammate can open the billing portal and cancel the org's subscription.
+- **Fix**: `@Roles('OWNER','ADMIN')` on `/checkout` and `/portal`.
+
+### H16 — ensureCustomer race creates duplicate Stripe customers
+- **File**: `billing/stripe.service.ts:78-95`
+- **Issue**: Concurrent `/checkout` requests create two Stripe customers; second overwrites `stripeCustomerId`, orphaning the first.
+- **Fix**: `prisma.$transaction` with `SELECT … FOR UPDATE` or upsert + unique index.
+
+---
+
+## MEDIUM
+
+### M1 — Account enumeration on /register
+- `auth.service.ts:26-28` throws `ConflictException('Email already registered')`. Login is correctly generic; align register.
+
+### M2 — Logout doesn't invalidate access JWT
+- Only deletes refresh sessions; 15-min access JWT survives. Add per-user `tokenVersion`; check in `JwtStrategy.validate`.
+
+### M3 — Refresh endpoint not throttled
+- `auth.controller.ts:63-70`. Add `@Throttle({ auth: { ttl: 60000, limit: 10 } })`.
+
+### M4 — Refresh-token replay detection / token family
+- `auth.service.ts:130-153`. Add `tokenFamily` column; reuse of rotated token invalidates the family.
+
+### M5 — Per-account login lockout missing
+- IP-only throttle; distributed credential stuffing not blocked. Add per-email failed-attempt counter with backoff.
+
+### M6 — Lead bulkCreate cross-org propertyId / assigneeId not validated
+- `leads/leads.service.ts:171-182, 149-159`. Validate every `propertyId` and `assigneeId` belongs to caller's org.
+
+### M7 — LoginDto password has no max length
+- 10MB password → bcrypt DoS. `@MaxLength(100)`.
+
+### M8 — Stripe key set without webhook secret should fail boot
+- `stripe.service.ts:135` throws on every request; better to fail boot.
+
+### M9 — CORS allowlist missing `www.` and `app.` subdomains
+- `main.ts:21-28` hardcodes `https://eavesight.com` only.
+
+### M10 — `typescript.ignoreBuildErrors: true` in next.config
+- Hides regressions in role/auth code shipping to prod.
+
+### M11 — @nestjs/* on 10.x; bump to 11.x for CVE coverage
+- GHSA-36xv-jgw5-4q75 (CVSS 6.1 injection), platform-express + multer chain.
+
+---
+
+## LOW
+
+### L1 — `poweredByHeader: false` not set in next.config
+### L2 — `images.domains` deprecated form, has dead `api.eavesight.app` entry (note `.app` typo)
+### L3 — Helmet CSP disabled in non-production
+### L4 — No password-reset flow exists at all (functional + security gap)
+### L5 — Frontend `middleware.ts` does no auth check (presence-of-cookie redirect would shave off SSR-rendered protected page leaks)
+### L6 — Confirm `pg_hba.conf` `10.200.0.0/16` rule is your VPN CIDR (not routable elsewhere)
+### L7 — Apply `git filter-repo` to remove historic LAN IP leak in `apps/frontend/.env.production` (low risk; was only `NEXT_PUBLIC_*` keys + LAN IP)
+
+---
+
+## Things checked and OK
+
+- `JWT_SECRET` hard-fails when missing
+- bcrypt cost 12, timing-safe compare
+- Login error messages generic (no enumeration)
+- Backend binds to 127.0.0.1 only; UFW deny-incoming
+- PostgreSQL bound to 127.0.0.1, scram-sha-256
+- ValidationPipe global with whitelist + forbidNonWhitelisted (defeated only where service signature accepts `any`)
+- No real secrets ever committed to git history
+- No supply-chain-incident packages present
+- bcrypt@5.1.1, prisma@5.x, helmet@8.x, class-validator@0.14.x current
+
+---
+
+## Iteration plan
+
+Hardening branch: `harden/security-2026-04-26`. Each batch: edit → typecheck → build → commit. **No prod restart overnight.** User reviews and deploys in the morning.
+
+Batch order (by blast radius):
+1. **C1–C5** — authz + IDOR
+2. **C6–C7** — billing correctness (webhook + plan enum)
+3. **H1–H3** — remaining authz gaps
+4. **H4–H7** — auth/JWT/OAuth hardening
+5. **H8–H9** — billing idempotency + lifecycle
+6. **H10–H11** — infra (trust proxy + headers)
+7. **H12–H13** — dependency bumps (Next 14.2.35, axios 1.15)
+8. **H14–H16** — remaining highs
+9. **M1–M11** — defense-in-depth
+10. **L1–L7** — polish
