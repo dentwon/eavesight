@@ -135,3 +135,19 @@ overnight:
 ### Loop stop reason
 - Critical/high autonomous-fixable items have been addressed.
 - Remaining items either (a) require user UX/architecture decisions or (b) need the pending migration to land. Both are user-review items, not autonomous-loop work.
+
+### Iteration 3 — 2026-04-27 (overnight, second /loop run)
+- DONE: **Batch D** (the largest deferred item from iteration 2): full frontend localStorage → httpOnly cookie migration. Backend issues cookies on every auth path; frontend stops storing tokens in localStorage entirely. Closes critical re-audit findings C1, C2, H2.
+- DONE: CSP `unsafe-eval` dropped in production (kept in dev for HMR). `form-action` narrowed to `'self'`.
+- VALIDATED: Backend tsc clean. Two consecutive `next build` runs clean (22 routes).
+- All commits on harden/security-2026-04-26 through d309de5. Eight commits total.
+
+### Loop final stop reason
+- Frontend cookie migration was the highest-leverage remaining critical; it's now closed.
+- Items still pending all require user input:
+  - **NC8 canvassing PII**: requires product/UX decision (mask owner fields by default vs. require explicit reveal).
+  - **NC7 PII allow-list invert**: large refactor touching every property serialization path.
+  - **NestJS 10→11 major bump**: risky in autonomous mode; defer to daylight.
+  - **typescript.ignoreBuildErrors=false**: requires fixing 5 pre-existing maplibre type errors in `MetroMap.tsx` line 2174-2348 (`*-transition` properties not in current @types/maplibre-gl).
+  - **Apply pending migration**: user-only operation.
+- Halting per loop protocol.
