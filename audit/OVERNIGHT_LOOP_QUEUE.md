@@ -122,3 +122,16 @@ overnight:
 - STARTED: Frontend `next build` (running async).
 - SKIPPED: Item C (frontend middleware auth gate) — current login flow uses zustand+localStorage, not cookies; cookie-only middleware can't gate non-OAuth users without coordinated frontend refactor. Filed as user-review item.
 - NEXT: Check next build result, then password-reset scaffold, then re-audit pass.
+
+### Iteration 2 — 2026-04-27 (overnight)
+- Spawned 3 parallel re-audit agents on harden branch.
+- Found 12+ new findings; appended to audit/SECURITY_AUDIT_2026-04-26.md.
+- DONE: Batch C — closed 9 of them (NC1 org mass-assign + role escalation, NC2 parcel harvester admin gates, NC4 bbox finite guards, NC10 health DSN scrub, earmark holder org overlap, lockout LRU, dummy bcrypt valid format, cf-connecting-ip loopback validation, NC3 metros throttle + limit cap).
+- Migration file extended with NC6 (reveal-meter race unique index).
+- Backend tsc clean.
+- DEFERRED: frontend localStorage->cookie migration (C1/C2/H2), canvassing PII bypass (NC8), PII allow-list invert (NC7), CSP nonce — all need user attention or significant refactor.
+- All commits on harden/security-2026-04-26: 5e04b4c → 5823c92 → d44cd1c → 15a0e3f → 33b4841 → 6e378fb.
+
+### Loop stop reason
+- Critical/high autonomous-fixable items have been addressed.
+- Remaining items either (a) require user UX/architecture decisions or (b) need the pending migration to land. Both are user-review items, not autonomous-loop work.
