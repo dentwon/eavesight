@@ -213,3 +213,80 @@ Batch order (by blast radius):
 8. **H14–H16** — remaining highs
 9. **M1–M11** — defense-in-depth
 10. **L1–L7** — polish
+
+
+---
+
+## Re-audit pass — 2026-04-27 (post batch B)
+
+Three parallel agents reviewed the harden branch for new findings.
+
+### Closed in batch C (this commit)
+
+- **NC1** — `OrganizationsService.update` accepted `plan` in DTO, letting any
+  ADMIN self-grant ENTERPRISE. `addMember` allowed an ADMIN to assign OWNER.
+  Fix: removed `plan` from `UpdateOrganizationDto`; role-ladder enforcement on
+  `addMember` (only OWNER may grant OWNER; ADMIN may grant ADMIN/MEMBER/VIEWER).
+- **NC2** — Madison/Huntsville/KCS parcel harvester POST routes were open to
+  any authenticated user. Now `@Roles('SUPER_ADMIN')` on every POST.
+- **NC10** — `/health/db` returned raw Prisma error message including DSN
+  (`postgresql://user:pass@…`). Now logs internally, returns generic status.
+- **Earmark holder org lookup** (re-audit #3) — was non-deterministic for
+  multi-org users via `findFirst`. Now queries direct overlap (caller orgId
+  ∈ holder's memberships).
+- **Lockout FIFO** (re-audit #6) — eviction was insertion-order, not LRU.
+  Attacker could churn 10k throwaway emails to push a target out of the map.
+  Fix: bump-on-touch via delete-then-set on `recordFailure`.
+- **Dummy bcrypt hash** (re-audit #8) — the constant string `$2b$12$0123…01a`
+  was not a valid bcrypt format; `bcrypt.compare` rejected fast and the
+  timing-equalization defense never engaged. Fix: real `bcrypt.hashSync`
+  result computed once at module load.
+- **NC4** — bbox/limit floats spliced into `$queryRawUnsafe` without
+  finiteness checks. `parseFloat` in current callers makes this safe today,
+  but a future caller bypassing parseFloat could inject. Fix: explicit
+  `Number.isFinite()` guards in `MapService.scoresForBbox` + `MapController`.
+
+### Deferred — require user attention
+
+- **C1 + H2 + C2 (frontend)** — tokens still stored in `localStorage` (zustand
+  + dedicated keys); SSE passes `?token=` in URL. The httpOnly-cookie work
+  on the backend (batch A) is half-done; the frontend still uses the old
+  fragment+localStorage flow. Full fix needs a coordinated frontend refactor:
+  - Backend: switch `/auth/login` and `/auth/refresh` to set the same
+    `eavesight_access` / `eavesight_refresh` cookies as Google OAuth, and
+    have `JwtStrategy` read either the Authorization header OR the cookie.
+  - Frontend: drop `localStorage.{set,get}Item('token'…)`, drop `partialize`
+    of token in `auth.ts`, change `lib/api.ts` to use `credentials:'include'`
+    instead of Authorization header.
+  - SSE: convert `useStormAlerts.ts` from `EventSource` to `fetch` with
+    `ReadableStream` (cookies sent automatically), or issue a short-lived
+    single-use ticket via POST.
+
+  Scope is too large for overnight work and risks breaking active sessions.
+
+- **NC3** — `metros/:code/viewport` and `metros/:code/top` are unscoped, no
+  rate limit, scrapeable. Add `@Throttle({ default: { ttl: 60_000, limit: 30 } })`
+  + min bbox size. Affects user-visible quotas; user should review impact.
+
+- **NC6** — Reveal-meter race (concurrent reveals double-spend). Fix needs
+  a `UNIQUE INDEX api_usage_org_service_property_period_idx ON apiUsage(orgId, service, propertyId, date_trunc('month', createdAt))`
+  + INSERT ON CONFLICT in `recordReveal`. Migration-dependent.
+  → Add to `audit/PENDING_MIGRATION_security_2026-04-26.sql`.
+
+- **NC7** — PII mask is block-list (`maskPii`) — easy to drift. Should be
+  inverted to an explicit allow-list of public fields. Touches the entire
+  property serialization layer; defer to user.
+
+- **NC8** — `canvassing.service.ts` returns owner PII (firstName, lastName,
+  phone, email, ownerFullName, ownerPhone, ownerEmail) without checking the
+  reveal economy. This bypasses the metering. Service-level fix: gate owner
+  fields behind `revealMeter.checkReveal` per row OR mask owner fields by
+  default in canvassing responses (only return contact info from the `Lead`
+  itself, not the underlying `Property`). User decides on UX.
+
+- **CSP `unsafe-eval`** — drop in production builds (Next.js 14 prod bundles
+  don't need it). Trivial follow-up.
+
+### Status log entry
+
+- 2026-04-27 iteration 2 (batch C): closed 7 re-audit findings. Backend tsc clean.

@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { KcsParcelService } from './kcs-parcel.service';
 import { PrismaService } from '../common/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 
 interface BatchResult {
   success: boolean;
@@ -48,6 +49,7 @@ export class KcsParcelController {
     private readonly prisma: PrismaService,
   ) {}
 
+  @Roles('SUPER_ADMIN')
   @Post('start-owner-enrichment')
   async startEnrichment(
     @Body() body: { startOffset?: number; maxBatches?: number; batchSize?: number },
@@ -85,6 +87,7 @@ export class KcsParcelController {
     return this.harvestStats;
   }
 
+  @Roles('SUPER_ADMIN')
   @Post('batch-owner')
   async runBatch(@Body() body: { offset?: number; batchSize?: number }): Promise<BatchResult> {
     const result = await this.harvester.harvestBatch(body.offset ?? 0, body.batchSize ?? 500);
@@ -121,6 +124,7 @@ export class KcsParcelController {
     return parcels;
   }
 
+  @Roles('SUPER_ADMIN')
   @Post('reset-owner-stats')
   async resetStats() {
     this.harvestStats = {

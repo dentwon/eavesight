@@ -115,3 +115,10 @@ overnight:
 ## Status log (loop appends here)
 
 (empty — loop fills in)
+
+### Iteration 1 — 2026-04-27 (overnight)
+- DONE: Validated dep bumps via `npm install` — next 14.1.0→14.2.35, axios 1.13.6→1.15.2.
+- DONE: Committed package-lock.json on harden branch.
+- STARTED: Frontend `next build` (running async).
+- SKIPPED: Item C (frontend middleware auth gate) — current login flow uses zustand+localStorage, not cookies; cookie-only middleware can't gate non-OAuth users without coordinated frontend refactor. Filed as user-review item.
+- NEXT: Check next build result, then password-reset scaffold, then re-audit pass.

@@ -1,6 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { TtlCache, bboxKey } from '../common/ttl-cache';
+
+/**
+ * Reject non-finite bbox / limit values BEFORE they're spliced into raw
+ * SQL. parseFloat on the controller side already prevents string SQL
+ * injection in practice, but template-literal interpolation of unchecked
+ * floats is fragile — a future caller that doesn't parseFloat could
+ * inject. Validate here, fail closed.
+ */
+function assertFiniteBbox(bbox: { minLat: number; maxLat: number; minLon: number; maxLon: number }): void {
+  for (const v of [bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon]) {
+    if (!Number.isFinite(v)) {
+      throw new BadRequestException('Invalid bbox: non-finite coordinate');
+    }
+  }
+  if (bbox.minLat > bbox.maxLat || bbox.minLon > bbox.maxLon) {
+    throw new BadRequestException('Invalid bbox: min greater than max');
+  }
+}
+function assertFiniteLimit(limit: number, max = 200_000): number {
+  if (!Number.isFinite(limit)) {
+    throw new BadRequestException('Invalid limit');
+  }
+  return Math.max(1, Math.min(Math.floor(limit), max));
+}
 
 export type MapLayer = 'lead_score' | 'roof_age' | 'storm_recent' | 'dormant' | 'pipeline';
 
@@ -76,6 +100,8 @@ export class MapService {
    * Get scores for buildings inside a bounding box, keyed by PMTiles numeric id.
    */
   async scoresForBbox(layer: MapLayer, bbox: Bbox, limit = 50000): Promise<Record<number, number>> {
+    assertFiniteBbox(bbox);
+    limit = assertFiniteLimit(limit);
     const cacheKey = `${layer}|${bboxKey(bbox.maxLat, bbox.minLat, bbox.maxLon, bbox.minLon, 0.01)}|l=${limit}`;
     const hit = this.scoresCache.get(cacheKey);
     if (hit) return hit;

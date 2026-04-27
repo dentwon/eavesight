@@ -48,6 +48,12 @@ export class LoginLockoutService {
       this.logger.warn(`Login lockout engaged for ${key} (${entry.failures.length} failures in window)`);
       entry.failures = [];
     }
+    // Bump-on-touch: delete-then-set so re-insertion moves the key to
+    // the tail of insertion order. Eviction (oldest 10%) then truly
+    // pops the least-recently-touched entries — without this, a
+    // determined attacker can churn 10k throwaway emails to push a
+    // target's entry out of the map and reset their counter.
+    this.state.delete(key);
     this.state.set(key, entry);
     this.evictIfTooLarge();
   }

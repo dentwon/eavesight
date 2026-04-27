@@ -99,7 +99,6 @@ export class OrganizationsService {
   }
 
   async addMember(orgId: string, email: string, role: string = 'MEMBER', userId: string) {
-    // Check if user is owner or admin
     const membership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: { organizationId: orgId, userId },
@@ -110,7 +109,16 @@ export class OrganizationsService {
       throw new ForbiddenException('You do not have permission to add members');
     }
 
-    // Find user by email
+    // Role-ladder enforcement: caller cannot grant a role higher than their own.
+    // OWNERs may grant any role. ADMINs may grant ADMIN/MEMBER/VIEWER, NOT OWNER.
+    // Never accept arbitrary strings — restrict to known enum values.
+    const allowedRoles = membership.role === 'OWNER'
+      ? ['OWNER', 'ADMIN', 'MEMBER', 'VIEWER']
+      : ['ADMIN', 'MEMBER', 'VIEWER'];
+    if (!allowedRoles.includes(role)) {
+      throw new ForbiddenException(`Cannot assign role ${role} as a ${membership.role}`);
+    }
+
     const userToAdd = await this.prisma.user.findUnique({
       where: { email },
     });
@@ -119,7 +127,6 @@ export class OrganizationsService {
       throw new NotFoundException('User not found');
     }
 
-    // Check if already a member
     const existingMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: { organizationId: orgId, userId: userToAdd.id },

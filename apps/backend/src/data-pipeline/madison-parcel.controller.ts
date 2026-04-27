@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards, Req, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 import { MadisonParcelService } from './madison-parcel.service';
 
 @ApiTags('madison')
@@ -42,6 +43,7 @@ export class MadisonParcelController {
     return this.parcelService.getByPin(pin);
   }
 
+  @Roles('SUPER_ADMIN')
   @Post('leads')
   @ApiOperation({ summary: 'Create a lead from a parcel PIN' })
   createLead(

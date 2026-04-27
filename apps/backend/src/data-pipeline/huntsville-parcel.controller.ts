@@ -2,6 +2,7 @@ import { Controller, Get, Post, Query, Body, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { HuntsvilleParcelService, HarvestStats } from './huntsville-parcel.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('harvester')
 @UseGuards(JwtAuthGuard)
@@ -26,6 +27,7 @@ export class HuntsvilleParcelController {
     return { count: parcels.length, parcels };
   }
 
+  @Roles('SUPER_ADMIN')
   @Post('batch')
   async runBatch(@Body() body: { offset?: number }): Promise<{
     success: boolean;
@@ -38,6 +40,7 @@ export class HuntsvilleParcelController {
     return this.harvester.harvestBatch(body.offset || 0);
   }
 
+  @Roles('SUPER_ADMIN')
   @Post('start')
   async startHarvest(@Body() body: { startOffset?: number; maxBatches?: number }): Promise<HarvestStats> {
     return this.harvester.runFullHarvest({
@@ -46,6 +49,7 @@ export class HuntsvilleParcelController {
     });
   }
 
+  @Roles('SUPER_ADMIN')
   @Post('reset')
   resetStats(): { message: string } {
     this.harvester.resetStats();

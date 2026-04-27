@@ -21,18 +21,31 @@ import { MetrosModule } from './metros/metros.module';
 import { BillingModule } from './billing/billing.module';
 
 /**
- * Custom throttle tracker. Behind Cloudflare tunnel + cloudflared the raw
- * req.ip is always 127.0.0.1; the real client IP is in `cf-connecting-ip`
- * (Cloudflare's authoritative header) or `x-forwarded-for` (set by the
- * cloudflared connector). With `trust proxy` set in main.ts, Express
- * exposes the resolved IP on `req.ip` — but cf-connecting-ip is more
- * reliable behind CF specifically, so prefer it when present.
+ * Custom throttle tracker. Behind Cloudflare tunnel + cloudflared, the
+ * cloudflared connector talks to us over loopback. Trust the
+ * `cf-connecting-ip` (CF's authoritative header) ONLY when the immediate
+ * peer is loopback — otherwise an attacker who can reach :4000 directly
+ * on the LAN can spoof any IP via the header to evade their rate-limit
+ * bucket OR DoS another user's bucket.
  */
+function isLoopbackPeer(req: any): boolean {
+  const remote = req?.socket?.remoteAddress || req?.connection?.remoteAddress;
+  if (!remote) return false;
+  return (
+    remote === '127.0.0.1' ||
+    remote === '::1' ||
+    remote === '::ffff:127.0.0.1' ||
+    remote.startsWith('127.')
+  );
+}
+
 function clientIpFromRequest(req: any): string {
-  const cf = req?.headers?.['cf-connecting-ip'];
-  if (typeof cf === 'string' && cf) return cf;
-  const xff = req?.headers?.['x-forwarded-for'];
-  if (typeof xff === 'string' && xff) return xff.split(',')[0].trim();
+  if (isLoopbackPeer(req)) {
+    const cf = req?.headers?.['cf-connecting-ip'];
+    if (typeof cf === 'string' && cf) return cf;
+    const xff = req?.headers?.['x-forwarded-for'];
+    if (typeof xff === 'string' && xff) return xff.split(',')[0].trim();
+  }
   return req?.ip || req?.socket?.remoteAddress || 'unknown';
 }
 

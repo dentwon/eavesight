@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Throttle } from '@nestjs/throttler';
 import { MetrosService, FilterOpts } from './metros.service';
 import type { Request } from 'express';
 
@@ -63,6 +64,7 @@ export class MetrosController {
   @ApiQuery({ name: 'minSpcTornadoCount',  required: false, description: 'SPC tornado reports >= this' })
   @ApiQuery({ name: 'minSpcSevereCount',   required: false, description: 'SPC severe-or-extreme reports >= this' })
   @ApiQuery({ name: 'hailSinceDays', required: false, description: 'spcHailLastDate within N days' })
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   viewport(
     @Param('code') code: string,
     @Query('lonMin')  lonMin: string,
@@ -85,7 +87,7 @@ export class MetrosController {
       latMin: parseFloat(latMin),
       lonMax: parseFloat(lonMax),
       latMax: parseFloat(latMax),
-      limit: limit ? parseInt(limit, 10) : undefined,
+      limit: limit ? Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500) : undefined,
       ...parseFilterOpts({
         dormantOnly, minScore, yearBuiltMin, yearBuiltMax,
         minSpcHailCount5y, minSpcHailMaxInches, minSpcTornadoCount,
@@ -106,6 +108,7 @@ export class MetrosController {
   @ApiQuery({ name: 'minSpcTornadoCount',  required: false })
   @ApiQuery({ name: 'minSpcSevereCount',   required: false })
   @ApiQuery({ name: 'hailSinceDays', required: false })
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   topProperties(
     @Param('code') code: string,
     @Query('limit') limit?: string,
@@ -120,7 +123,7 @@ export class MetrosController {
     @Query('hailSinceDays') hailSinceDays?: string,
   ) {
     return this.metros.topProperties(code, {
-      limit: limit ? parseInt(limit, 10) : undefined,
+      limit: limit ? Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500) : undefined,
       ...parseFilterOpts({
         dormantOnly, minScore, yearBuiltMin, yearBuiltMax,
         minSpcHailCount5y, minSpcHailMaxInches, minSpcTornadoCount,

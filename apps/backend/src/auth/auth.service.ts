@@ -9,6 +9,13 @@ import { Prisma } from '@prisma/client';
 import { GoogleOAuthProfile } from './google.strategy';
 import { LoginLockoutService } from './login-lockout.service';
 
+// Real bcrypt hash of a random throwaway password, computed once at module
+// load. Used in `login()` to keep timing roughly constant when the email
+// doesn't exist — `bcrypt.compare` runs the full key-derivation against
+// this real hash before returning false, instead of failing fast on a
+// malformed string.
+const TIMING_DUMMY_HASH = bcrypt.hashSync('eavesight-timing-dummy-' + crypto.randomBytes(16).toString('hex'), 12);
+
 /**
  * AuthService.
  *
@@ -104,7 +111,7 @@ export class AuthService {
 
     if (!user || !user.passwordHash) {
       // Run a dummy bcrypt to avoid a timing oracle on email existence.
-      await bcrypt.compare(password, '$2b$12$0123456789012345678901234567890123456789012345678901a');
+      await bcrypt.compare(password, TIMING_DUMMY_HASH);
       this.lockout.recordFailure(email);
       throw new UnauthorizedException('Invalid credentials');
     }

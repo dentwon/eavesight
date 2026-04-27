@@ -203,12 +203,16 @@ export class AlertsService {
 
     if (!property.isEarmarked || !property.earmarkedByUserId) return;
 
-    // Look up the existing earmark holder's org membership.
-    const holder = await this.prisma.organizationMember.findFirst({
-      where: { userId: property.earmarkedByUserId },
-      select: { organizationId: true },
+    // Allow the mutation only if the existing earmark holder is also a
+    // member of the caller's org. Multi-org users (membership in N orgs)
+    // pass when ANY of their memberships matches the caller — this is a
+    // deliberate widening: a user in both Org A and Org B can transfer
+    // an earmark between them. If no overlap, deny.
+    const sharedMembership = await this.prisma.organizationMember.findFirst({
+      where: { userId: property.earmarkedByUserId, organizationId: orgId },
+      select: { id: true },
     });
-    if (holder && holder.organizationId !== orgId) {
+    if (!sharedMembership) {
       throw new ForbiddenException('Property is earmarked by another organization');
     }
   }

@@ -100,3 +100,14 @@ COMMIT;
 --   - The Plan enum mismatch is resolved; checkout webhooks will succeed.
 --   - Webhook replays will be deduped via ProcessedStripeEvent.
 --   - Cancel/refund can update subscriptionStatus and downgrade plan.
+
+-- ----------------------------------------------------------------------------
+-- 7. Reveal-meter race (NC6) — concurrent reveals can double-spend at the
+--    quota boundary. Add a unique partial index so a second insert in the
+--    same period for the same (org, service, property) fails atomically.
+-- ----------------------------------------------------------------------------
+-- NOTE: depends on the apiUsage table schema. Verify column names against
+-- prisma/schema.prisma model ApiUsage before applying.
+CREATE UNIQUE INDEX IF NOT EXISTS "api_usage_reveal_dedup_idx"
+  ON "api_usage" ("orgId", "service", "propertyId", DATE_TRUNC('month', "createdAt"))
+  WHERE "propertyId" IS NOT NULL;

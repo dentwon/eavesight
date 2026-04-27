@@ -26,7 +26,8 @@ export class MapController {
       maxLon: parseFloat(maxLon),
       maxLat: parseFloat(maxLat),
     };
-    const lim = Math.min(parseInt(limit || '50000'), 200000);
+    const limParsed = parseInt(limit || '50000');
+    const lim = Number.isFinite(limParsed) ? Math.min(limParsed, 200000) : 50000;
     const scores = await this.mapService.scoresForBbox(layer, bbox, lim);
     return { layer, bbox, scores };
   }
