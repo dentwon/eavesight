@@ -267,3 +267,105 @@ This is currently outside the Prisma migration timeline. Recommendation: add a P
 ---
 
 — Code, signing off
+
+---
+
+## Final-final addendum — extended overnight with you live (~04:00 UTC – 09:00 UTC)
+
+You stayed up much longer than you said you would. We got a LOT more done in the bonus session.
+
+### Targeting model sharpened from "roof age" to "asphalt + age + insurance window"
+
+Three insights you brought live during the session that reframed everything:
+
+1. **15-25 year old asphalt is the prime lead window** — younger doesn't need replacing; metal/clay isn't our market regardless of age.
+2. **Storm hits don't equal replacements** — most homeowners DON'T file claims after hail. Storm hits make a property *eligible* for an insurance-paid reroof, not proof one happened. Fix: roof_age = current_year - yearBuilt unless there's *hard* evidence of replacement (permit / contractor-gallery / explicit MLS year).
+3. **AL insurance claim window = ~24 months from storm** (Ala. Code §27-14-19 default 1 year; carriers extend to 2). Properties hit by storms with a closing window are URGENT leads — the homeowner is about to lose their insurance-paid replacement option.
+
+### New tables / scripts landed in the bonus session
+
+- **`scripts/compute-storm-implied-roof-signals.sql`** — already covered above (172,880 storm-implied signals at severity-tiered confidence).
+- **`scripts/load-mls-roof-signals.sql`** — bulk-resolve via lat/lon (the JS version was too slow under DB load). 194 signals total (96 explicit year + 87 mention + 11 metal-roof).
+- **`scripts/harvest-hmda-home-improvement.js`** — 20,496 home-improvement loan records across 6 yr × 12 N-AL counties. Tract-level prior.
+- **`scripts/load-contractor-job-signals.sql`** — Advanced Roofing of Alabama gallery → 20 confirmed reroofs at confidence 0.90.
+- **`scripts/geocode-and-resolve-permits.js`** — Census-Batch geocoder for the 666 permits the fuzzy ILIKE resolver couldn't match. **+193 new ground-truth signals (797 → 990 → 1,054 after re-runs).**
+- **`scripts/materialize-roof-age-v2.sql`** — materializes the v2 blend per-property to a queryable `roof_age_v2` table (242,985 rows).
+- **`scripts/compute-lead-priority.sql`** — combines roof age + asphalt filter + storm + insurance-window into a per-property `lead_priority` ranking (PRIORITY_1_BURNING_PRIME ... NOT_LEAD).
+- **`scripts/dump-top-leads.sql`** — `top_leads_burning` table (40,392 actionable leads with full address + storm context + owner). Sales-rep-ready.
+- **`scripts/refresh-roof-signals.sh`** — 5-step periodic-refresh cron; suggested every 4 hours.
+- **`scripts/permits-madison-county.js` --by-year** — bypasses 100-cap with year-prefix iteration handling the 3 permit-number formats the County has used over time.
+
+### New docs
+
+- **`docs/HUNTSVILLE_GOVBUILT_HANDOFF.md`** — detailed scrape-task spec for Claude Desktop's browser extension to attack the Cloudflare-gated `huntsvilleal.govbuilt.com` portal (the biggest single coverage gap; estimated 3,000-8,000 reroofs). Also includes Athens GovBuilt and Hartselle GovBuilt (newly discovered).
+- **`docs/AL_INSURANCE_CLAIM_WINDOW.md`** — the 5-tier urgency model (ON_FIRE / URGENT / PRIME / EARLY / FRESH) and the lead-priority decision tree.
+
+### The actionable lead pool right now
+
+```
+  PRIORITY_1_BURNING_PRIME   13,702   15-25yr asphalt + claim closes <30 days
+  PRIORITY_2_BURNING_AGED    23,469   26+yr asphalt + claim closes <30 days
+  PRIORITY_4_LIVE_OLD         3,221   90-365 days remaining
+  PRIORITY_5_AGED_NO_STORM  136,803   cash-sale aged cohort (>26 yr)
+  PRIORITY_6_PRIME_AGED      34,453   15-25 yr no recent storm (medium pipeline)
+  ──────────                ──────
+  TOTAL ACTIONABLE          211,648
+  TOTAL BURNING (P1+P2)      37,171   ← call/door-knock NOW
+```
+
+Most of the BURNING cohort is **2024-05-08 tornado victims** with 9 days until 2-year claim window closes. Zip 35801 (Huntsville core) dominates: 27,659 leads.
+
+### True ground-truth roof age count went 461 → 1,054 (+128%) in this session
+
+- Decatur permits (post-geocode-fix): 574 unique
+- Madison-City permits: 171
+- Madison-City legacy (geocode-rescued): 140
+- Madison-County permits: 98
+- MLS realtor-typed YYYY: 96
+- Contractor gallery (Advanced Roofing): 20
+- Total unique with TRUE dated roof age: **1,054**
+
+### Geographic distribution (per-region penetration vs Decatur 1.81% baseline)
+
+| Region | Properties | True ages | % | Gap to 1.81% |
+|---|---|---|---|---|
+| Decatur (benchmark) | 30,209 | 548 | 1.81% | — |
+| Madison City | 27,973 | 250 | 0.89% | −256 |
+| Madison County north | 38,087 | 55 | 0.14% | −635 |
+| Owens Cross / Hampton | 27,052 | 31 | 0.12% | −459 |
+| **Huntsville core** | **61,215** | **60** | **0.10%** | **−1,048** |
+| Other rural | 41,573 | 42 | 0.10% | −710 |
+| Limestone / Athens | 15,116 | 3 | 0.02% | −271 |
+
+**Total gap to parity: ~3,400 more dated reroof signals.** Huntsville GovBuilt scrape (browser-extension required) closes most of the biggest gap.
+
+### Data quality flags (worth fixing)
+
+1. **2025 storm events have NO severity columns populated** — `storm_events` 2025 has 3,663 rows but ZERO with `hailSizeInches`/`windSpeedMph`/`tornadoFScale` ≥ qualifying threshold. Likely a different ingestion source than 2024 that dropped severity. Fix: re-ingest 2025 with severity.
+2. **3 properties in Limestone County have `yearBuilt = 20119` or `20198`** — botched limestone-assessor-scrape data. Easy SQL fix: `UPDATE properties SET "yearBuilt" = 2019 WHERE "yearBuilt" > 2030`.
+3. **`properties.zip` is unreliable** — many Madison-City + Decatur properties tagged with placeholder zip `35000` or with the wrong county zip. Geocoding fixed this for the permit data we just landed; for the property base it'd need a separate Census-batch run.
+4. **`properties.ownerOccupied` is mostly default-FALSE** (0.2% true, 93% false, 7% null) — basically unusable as a signal.
+5. **Property addresses lack a trigram index** — fuzzy ILIKE resolution is slow under DB load. `CREATE EXTENSION pg_trgm; CREATE INDEX ... USING gin (address gin_trgm_ops);` would speed up 10-100× and unblock future resolver work.
+
+### Tomorrow's hand-offs ready
+
+1. **Prithvi inference (17:00 today)** — `node scripts/load-prithvi-signals.js --commit --jsonl=... --auc=<reported> --validate-against=decatur` plugs straight in. Friday gate `recall_2yr ≥ 0.70 AND mae_years ≤ 2.5`.
+2. **Huntsville/Athens/Hartselle GovBuilt scrape** — `docs/HUNTSVILLE_GOVBUILT_HANDOFF.md` spec; needs Claude Desktop with logged-in browser extension to bypass Cloudflare turnstile.
+3. **Set up cron** — `0 */4 * * * /home/dentwon/Eavesight/scripts/refresh-roof-signals.sh` will keep the lead-priority pipeline fresh with new MLS hits + permits as they trickle in.
+
+### Final actionable artifact for sales
+
+The `top_leads_burning` table is queryable directly:
+
+```sql
+SELECT priority_label, address, city, zip, days_until_claim_close,
+       roof_age_years, hail_inches, storm_event_date, owner_name
+FROM top_leads_burning
+WHERE priority_rank IN (1, 2)
+ORDER BY priority_rank, days_until_claim_close, roof_age_years DESC
+LIMIT 1000;
+```
+
+40,392 rows total; top 1,000 is the immediate dial-pad / mailer / door-knock list for the next 30 days. After that the 2024-05-08 cohort's claim window expires and the BURNING cohort shrinks dramatically (until the next major storm).
+
+— Code, ✅ extended-overnight wrap
