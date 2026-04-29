@@ -9,10 +9,11 @@
 ## TL;DR
 
 What you'll see at the top of the dashboard tomorrow:
-- **211 NEW high-confidence reroof signals** (Madison-City + Madison-County permits) on top of the 461 Decatur baseline → **672 total reroof_permit signals across 613 unique properties**.
+- **279 NEW high-confidence reroof signals** (Madison-City + Madison-County permits) on top of the 461 Decatur baseline → **740 total reroof_permit signals across 681 unique properties** (vs. 461 / 461 unique at session start — that's a +48% expansion of our highest-confidence ground-truth set in one night).
+- **+86 new Madison-City building_permits** unlocked by the `--by-year` flag that bypasses the Tyler eSuite 100-result-per-query cap (Madison-City unfiltered query had been hiding ~50% of the actual permits).
 - **242,987 building footprints (100% coverage) backfilled with MS v2 capture dates** — every property in N-AL now has a "building existed by year X" anchor.
 - **10 OSM start_date anchors** for landmark commercial properties.
-- Score recompute (`compute-scores-v3.sh`) RUNNING — first pass still on solar-score step (6+ min as of writeup; it's the slowest step on a 242k-row PERCENTILE_CONT + UPDATE).
+- Score recompute (`compute-scores-v3.sh`) RUNNING — past the slow PERCENTILE_CONT phase (steps 1-3) and into the chunked stages (steps 4-12). On step 7 of 12 as of writeup. Estimated remaining: 30-90 min.
 - **Loader for Prithvi inference output is ready and tested end-to-end** — Desktop's 17:00 inference drop tomorrow will land in `property_signals` within ~minutes of arrival, with calibration filter + Decatur cross-validation harness baked into the same script.
 - **`compute-roof-age-v2.sql` blend exists, runs in 10s on the full 242k base, dry-run output verified.** Properly classifies first-roof vs replacement events per the follow-up doc's new-construction filter.
 - **Storm bubble overlay UX spec written** (docs only, no MetroMap.tsx touch — Desktop's lane).
@@ -54,11 +55,13 @@ Every N-AL property now has a "building existed by date X" anchor. This is a har
 | signalType | source | count | confidence floor |
 |---|---|---|---|
 | reroof_permit | permit.decatur | 461 | 0.95 |
-| reroof_permit | permit.madison-city | 103 | 0.95 |
+| reroof_permit | permit.madison-city | **171** (post-byyear) | 0.95 |
 | reroof_permit | permit.madison-county | 98 | 0.95 |
 | osm_start_date | osm | 10 | 0.50 |
 
-**Unique properties with a reroof_permit signal: 613.** Of 242,987 N-AL properties, that's 0.25%, but each of those is a 0.95-confidence ground-truth replacement event. **This 613 is the validation set Desktop's Prithvi inference will be cross-checked against tomorrow.**
+**Unique properties with a reroof_permit signal: 681 (post-byyear).** Of 242,987 N-AL properties, that's 0.28%, but each of those is a 0.95-confidence ground-truth replacement event. **This 681 is the validation set Desktop's Prithvi inference will be cross-checked against tomorrow.**
+
+The Madison-City byyear add: After the initial scrape uncovered the Tyler eSuite 100-result cap, a `--by-year` follow-up walked the form by permit-number prefix (`2010`, `2011`, ..., `2026`) and pulled 86 additional permits hidden by the cap. 171/210 = 81% match rate on the full Madison-City dataset.
 
 ### `building_permits` — by source
 
@@ -68,11 +71,23 @@ Every N-AL property now has a "building existed by date X" anchor. This is a har
 | huntsville-coc (legacy) | 12,901 | 0 |
 | decatur (legacy) | 6,897 | 758 |
 | madison-city (legacy, non-roofing) | 210 | 0 |
-| permit.madison-county (NEW tonight) | 139 | 139 |
-| permit.madison-city (NEW tonight) | 124 | 124 |
+| **permit.madison-city (NEW tonight, post-byyear)** | **210** | **210** |
+| **permit.madison-county (NEW tonight)** | **139** | **139** |
 | permits-scottsboro (legacy) | 50 | 0 |
 
 > **Naming-convention note:** legacy scrapers use `madison-city`, `decatur`, `huntsville-coc` (no namespace prefix). New scrapers tonight use `permit.madison-city`, `permit.madison-county`. Pre-flight doc captures the rationale; existing data is untouched.
+
+### v2 blend — evidence-class aggregate (post-overnight)
+
+```
+    evidence_class    | properties | yr_min | yr_max | yr_avg
+----------------------+------------+--------+--------+--------
+ VERIFIED_FIRSTROOF   |     225,384|   1860 |   2026 |   1988
+ IMPUTED_FIRSTROOF    |      16,476|   2000 |   2019 |   2019
+ VERIFIED_REPLACEMENT |       1,125|   2005 |   2026 |   2022
+```
+
+So ~99.999% of N-AL properties now have *some* roof-age signal feeding the v2 blend (242,985 of 242,987 with non-NONE class). Of those, 1,125 carry a high-confidence replacement event (post-yearBuilt-filter), the other ~241k carry first-roof priors derived from yearBuilt (VERIFIED) or MS v2 capture-date (IMPUTED). When Prithvi inference lands tomorrow, the `VERIFIED_REPLACEMENT` count is the cohort that grows.
 
 ### Madison-City + County match-rate diagnostic
 
@@ -158,9 +173,9 @@ This is currently outside the Prisma migration timeline. Recommendation: add a P
 
 3. **Source naming convention** — handoff suggested `permits-madison-city` (hyphen-separated). Existing convention is dot-separated (`permit.decatur`). Followed the existing convention for `permit.madison-city` and `permit.madison-county`.
 
-4. **Page-size dropdown postback resets the search filter** on Tyler eSuite. Workaround: walk default 10-row pages, post back through `pagingRepeater$Articles{N}` with the form's `actionUrl=AdvancedSearch.aspx?page=N+1` re-set. (5 hours of wall-clock learning condensed: the postback URL had to match the JS action URL or ASP.NET treats it as a fresh form load.)
+4. **Page-size dropdown postback resets the search filter** on Tyler eSuite. Workaround: walk default 10-row pages, post back through `pagingRepeater$Articles{N}` with the form's `actionUrl=AdvancedSearch.aspx?page=N+1` re-set. (Learning condensed: the postback URL had to match the JS action URL or ASP.NET treats it as a fresh form load.)
 
-5. **Madison-City + Madison-County total much smaller than dragnet estimate** — dragnet doc estimated 8-15k roofing permits. Actual: Madison-City has 124 (24 commercial + 100 residential), Madison-County has 139 (39 commercial + 100 residential). Either the portals cap displayed results at 100 per filter, or these municipalities actually permit very few roof jobs. Worth investigating but not blocking — 263 0.95-confidence signals is still a meaningful contribution.
+5. **Tyler eSuite hard-caps at 100 results per query** — discovered post-deploy. Initial unfiltered crawls captured only 100 per type, missing ~50% of Madison-City's history. Added `--by-year` flag to permits-madison-city.js: iterates permit-number prefix `2010` → `2026`, each year fits under the cap. Re-ran Madison-City byyear → 210 building_permits (vs 124 previously) and 171 reroof_permit signals (vs 103 previously). Madison-County uses `0YYNNNNN` permit format with CONTAINS-match search, so the same 4-digit-year trick doesn't work there; would need 0YY-prefix iteration with sub-drilldown for years exceeding 100. Deferred (current 100 capture is probably ~50% of true total — diminishing returns vs the City byyear gain).
 
 ---
 
