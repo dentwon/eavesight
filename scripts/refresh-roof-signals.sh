@@ -11,6 +11,7 @@
 #   3. Re-materialize roof_age_v2 (per-property best estimate)
 #   4. Re-materialize lead_priority (asphalt + age + insurance window)
 #   5. Re-materialize top_leads_burning (sales-ready dump)
+#   6. Re-build property_pin_cards (surfaces v2 fields to MetroMap)
 #
 # Cron suggestion:
 #   0 */4 * * * /home/dentwon/Eavesight/scripts/refresh-roof-signals.sh \
@@ -36,8 +37,11 @@ $PSQL -f "$SCRIPTS/materialize-roof-age-v2.sql" >/dev/null
 echo "$(ts) [4/5] re-materializing lead_priority..."
 $PSQL -f "$SCRIPTS/compute-lead-priority.sql" >/dev/null
 
-echo "$(ts) [5/5] re-materializing top_leads_burning..."
+echo "$(ts) [5/6] re-materializing top_leads_burning..."
 $PSQL -f "$SCRIPTS/dump-top-leads.sql" >/dev/null
+
+echo "$(ts) [6/6] rebuilding property_pin_cards (surfaces v2 fields to map)..."
+$PSQL -v metro="'north-alabama'" -f "$SCRIPTS/build-pin-cards-v4.sql" >/dev/null
 
 echo "$(ts) refresh-roof-signals done"
 $PSQL -c "
