@@ -278,6 +278,20 @@ function parseDetail(html) {
   };
 }
 
+/* Madison-County permit-number format evolved over time. Verified from data:
+ *   2005-2006: "0YYNNNNN"   (e.g. 0504766)
+ *   2007-2016: "YY-NNNNNN"  (e.g. 16-006581)
+ *   2017+:     "YYYY-NNNNNNNN" (e.g. 2023-00002631)
+ * Returns the right prefix for the year. CONTAINS-match means each value
+ * yields just that year's permits.
+ */
+function fmtCountyYearPrefix(year) {
+  if (year >= 2017) return String(year);                      // "2024"
+  if (year >= 2007) return String(year % 100).padStart(2, '0') + '-'; // "16-"
+  if (year >= 2005) return '0' + String(year % 100).padStart(2, '0'); // "0506"
+  return null;
+}
+
 async function fetchSearchPage(state, type, log, permitNumberPrefix = '') {
   // The page-size dropdown isn't part of the EVENTVALIDATION whitelist on the
   // initial GET — including it here causes a server-side validation failure.
@@ -356,8 +370,9 @@ async function fetchPermitDetail(detailId) {
   return r.body;
 }
 
-async function harvestType(type, args, log) {
-  log(`--- type=${type} (${type === TYPE_COMMERCIAL_ROOFING ? 'commercial' : 'residential'} roofing) ---`);
+async function harvestType(type, args, log, permitPrefix = '') {
+  const label = `type=${type}${permitPrefix ? ` prefix=${permitPrefix}` : ''}`;
+  log(`--- ${label} (${type === TYPE_COMMERCIAL_ROOFING ? 'commercial' : 'residential'} roofing) ---`);
 
   const pageSize = args.pageSize || '50';
 
@@ -371,7 +386,7 @@ async function harvestType(type, args, log) {
   //    per page; the ddlNoOFRows postback resets the filter on the server side
   //    so we accept the smaller pages and walk pagination instead).
   await sleep(PACE_MS);
-  let html = await fetchSearchPage(state, type, log);
+  let html = await fetchSearchPage(state, type, log, permitPrefix);
   state = extractViewState(html);
   let rows = parseResultRows(html);
   log(`page=1 rows=${rows.length}`);
@@ -425,7 +440,7 @@ async function harvestType(type, args, log) {
         __VIEWSTATEGENERATOR: state.__VIEWSTATEGENERATOR,
         __EVENTVALIDATION: state.__EVENTVALIDATION,
         __PREVIOUSPAGE: state.__PREVIOUSPAGE || '',
-        'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': '',
+        'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': permitPrefix,
         'ctl00$ctl00$Content$DefaultContent$ddlPermitType': String(type),
         'ctl00$ctl00$Content$DefaultContent$txtServiceAddress': '',
         'ctl00$ctl00$Content$DefaultContent$txtServiceAddress_TextBoxWatermarkExtender_ClientState': '',
@@ -465,7 +480,33 @@ async function harvestType(type, args, log) {
     pageIdx++;
   }
 
-  log(`type=${type} total unique rows=${allRows.length} (portalReported=${totalReported ?? 'n/a'}, lnkMoreClicks=${usedLnkMore})`);
+  log(`${label} total unique rows=${allRows.length} (portalReported=${totalReported ?? 'n/a'}, lnkMoreClicks=${usedLnkMore})`);
+  return allRows;
+}
+
+async function harvestTypeAllYears(type, args, log) {
+  // Madison-County uses 0YY-prefix permit numbers. Iterate 2010-current.
+  const allRows = [];
+  const seen = new Set();
+  const startYear = args.startYear || 2010;
+  const endYear = args.endYear || (new Date().getFullYear() + 1);
+  for (let y = startYear; y <= endYear; y++) {
+    const prefix = fmtCountyYearPrefix(y);
+    if (!prefix) { log(`year=${y} no-prefix-format-known, skipping`); continue; }
+    let yearRows;
+    try {
+      yearRows = await harvestType(type, args, log, prefix);
+    } catch (e) {
+      log(`harvestType(${type}, year=${y} prefix=${prefix}) failed: ${e.message}`);
+      continue;
+    }
+    let added = 0;
+    for (const r of yearRows) {
+      if (!seen.has(r.permitNumber)) { seen.add(r.permitNumber); allRows.push(r); added++; }
+    }
+    log(`year=${y} prefix=${prefix} added=${added} cumulative=${allRows.length}`);
+  }
+  log(`type=${type} ALL YEARS total unique rows=${allRows.length}`);
   return allRows;
 }
 
@@ -476,6 +517,11 @@ async function main() {
   const skipDetails = argvRaw.includes('--skip-details');
   const maxPagesArg = argvRaw.find((a) => a.startsWith('--max-pages='));
   args.maxPages = maxPagesArg ? Number(maxPagesArg.slice(12)) : 50;
+  const byYear = argvRaw.includes('--by-year');
+  const startYearArg = argvRaw.find((a) => a.startsWith('--start-year='));
+  const endYearArg = argvRaw.find((a) => a.startsWith('--end-year='));
+  args.startYear = startYearArg ? Number(startYearArg.slice('--start-year='.length)) : 2005;
+  args.endYear = endYearArg ? Number(endYearArg.slice('--end-year='.length)) : (new Date().getFullYear() + 1);
   const types = typesArg
     ? typesArg.slice('--types='.length).split(',').map(Number).filter(Boolean)
     : [TYPE_COMMERCIAL_ROOFING, TYPE_RESIDENTIAL_ROOFING];
@@ -492,7 +538,7 @@ async function main() {
     for (const type of types) {
       let rows;
       try {
-        rows = await harvestType(type, args, log);
+        rows = byYear ? await harvestTypeAllYears(type, args, log) : await harvestType(type, args, log);
       } catch (e) {
         log(`harvestType(${type}) FAILED: ${e.message}`);
         continue;
