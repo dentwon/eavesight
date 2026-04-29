@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS top_leads_burning (
   hail_inches              double precision,
   wind_mph                 double precision,
   tornado_scale            text,
+  severity_subrank         int,        -- 1 (tornado EF2+) → 7 (no qualifying)
   days_until_claim_close   int,
   owner_name               text,
   mailing_address          text,
@@ -44,6 +45,7 @@ CREATE TABLE IF NOT EXISTS top_leads_burning (
   metro_score_bucket       text,
   computed_at              timestamptz NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS top_leads_subrank_idx ON top_leads_burning (priority_rank, severity_subrank, days_until_claim_close);
 CREATE INDEX IF NOT EXISTS top_leads_priority_idx ON top_leads_burning (priority_rank, days_until_claim_close);
 CREATE INDEX IF NOT EXISTS top_leads_zip_idx ON top_leads_burning (zip, priority_rank);
 
@@ -69,6 +71,7 @@ INSERT INTO top_leads_burning
    year_built, roof_age_years, age_tier,
    priority_label, priority_rank, urgency_tier,
    storm_event_date, storm_type, hail_inches, wind_mph, tornado_scale,
+   severity_subrank,
    days_until_claim_close, owner_name, mailing_address,
    metro_score, metro_score_bucket)
 SELECT
@@ -88,6 +91,17 @@ SELECT
   s."hailSizeInches",
   s."windSpeedMph",
   s."tornadoFScale",
+  -- severity_subrank: 1=highest (tornado EF2+) → 7=lowest (no qualifying storm)
+  CASE
+    WHEN s.storm_type='TORNADO' AND s."tornadoFScale" IN ('EF2','EF3','EF4','EF5') THEN 1
+    WHEN s.storm_type='TORNADO' AND s."tornadoFScale" = 'EF1'                       THEN 2
+    WHEN s.storm_type='HAIL'    AND s."hailSizeInches" >= 2.0                       THEN 3
+    WHEN s.storm_type='HAIL'    AND s."hailSizeInches" >= 1.5                       THEN 4
+    WHEN s.storm_type='WIND'    AND s."windSpeedMph"   >= 80                        THEN 5
+    WHEN s.storm_type='HAIL'    AND s."hailSizeInches" >= 1.0                       THEN 6
+    WHEN s.storm_type='WIND'    AND s."windSpeedMph"   >= 70                        THEN 7
+    ELSE 9
+  END,
   lp.insurance_days_remaining,
   p."ownerFullName",
   COALESCE(p."ownerMailAddress", '') ||
@@ -119,9 +133,15 @@ SELECT priority_label,
        AVG(metro_score)::numeric(4,2) AS avg_metro_score
 FROM top_leads_burning GROUP BY 1 ORDER BY priority_label;
 
--- Top 20 sample
-SELECT priority_label, days_until_claim_close, roof_age_years,
-       address, city, zip, hail_inches, storm_event_date
+-- Top 20 sample (sorted by severity sub-rank)
+SELECT priority_label, severity_subrank, days_until_claim_close, roof_age_years,
+       address, city, zip, storm_type, hail_inches, tornado_scale, storm_event_date
 FROM top_leads_burning
-ORDER BY priority_rank, days_until_claim_close, roof_age_years DESC
+WHERE priority_rank IN (1, 2)
+ORDER BY priority_rank, severity_subrank, days_until_claim_close, roof_age_years DESC
 LIMIT 20;
+
+-- Severity-rank sub-distribution
+SELECT priority_label, severity_subrank, COUNT(*)
+FROM top_leads_burning WHERE priority_rank IN (1, 2)
+GROUP BY 1, 2 ORDER BY 1, 2;
