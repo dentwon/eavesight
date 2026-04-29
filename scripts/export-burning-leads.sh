@@ -25,33 +25,31 @@ if [ -n "$ZIP_FILTER" ]; then
   ZIP_CLAUSE="AND zip = ANY(string_to_array('$ZIP_FILTER', ',')::text[])"
 fi
 
-psql -U eavesight -h localhost -p 5433 -d eavesight -tAF, -c "
-\\copy (
-  SELECT
-    priority_label,
-    severity_subrank,
-    days_until_claim_close,
-    roof_age_years,
-    address,
-    city,
-    zip,
-    lat, lon,
-    storm_event_date::text,
-    storm_type,
-    COALESCE(hail_inches::text, '') AS hail_inches,
-    COALESCE(wind_mph::text, '') AS wind_mph,
-    COALESCE(tornado_scale, '') AS tornado_scale,
-    COALESCE(owner_name, '') AS owner_name,
-    COALESCE(mailing_address, '') AS owner_mailing_address,
-    metro_score::numeric(4,2)::text AS metro_score,
-    metro_score_bucket
-  FROM top_leads_burning
-  WHERE priority_rank IN (1, 2)
-    $ZIP_CLAUSE
-  ORDER BY priority_rank, severity_subrank, days_until_claim_close, roof_age_years DESC
-  LIMIT $LIMIT
-) TO '$OUT_FILE' WITH (FORMAT csv, HEADER true)
-" >/dev/null
+psql -U eavesight -h localhost -p 5433 -d eavesight --csv -c "
+SELECT
+  priority_label,
+  severity_subrank,
+  days_until_claim_close,
+  roof_age_years,
+  address,
+  city,
+  zip,
+  lat, lon,
+  storm_event_date::text AS storm_event_date,
+  storm_type,
+  COALESCE(hail_inches::text, '') AS hail_inches,
+  COALESCE(wind_mph::text, '') AS wind_mph,
+  COALESCE(tornado_scale, '') AS tornado_scale,
+  COALESCE(owner_name, '') AS owner_name,
+  COALESCE(mailing_address, '') AS owner_mailing_address,
+  metro_score::numeric(4,2)::text AS metro_score,
+  metro_score_bucket
+FROM top_leads_burning
+WHERE priority_rank IN (1, 2)
+  $ZIP_CLAUSE
+ORDER BY priority_rank, severity_subrank, days_until_claim_close, roof_age_years DESC
+LIMIT $LIMIT
+" > "$OUT_FILE"
 
 ROWS=$(wc -l < "$OUT_FILE")
 echo "Exported $((ROWS - 1)) rows to $OUT_FILE"
