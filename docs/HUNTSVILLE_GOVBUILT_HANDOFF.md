@@ -59,6 +59,7 @@ The Census Batch Geocoder pipeline (`scripts/geocode-and-resolve-permits.js`) is
 |---|---|---|---|
 | Huntsville GovBuilt | huntsvilleal.govbuilt.com | 3,000-8,000 | Yes |
 | Athens GovBuilt | athensalabama.govbuilt.com | 200-500 | Yes |
+| Hartselle GovBuilt | hartselleal.govbuilt.com | 100-300 | Yes (newly found) |
 | Cullman iWorQ | cullmanal.portal.iworq.net/CULLMANAL/permits/600 | 200-500 | reCAPTCHA |
 | Scottsboro Cloudpermit | us.cloudpermit.com (territory=scottsboro) | unknown | Login wall |
 
