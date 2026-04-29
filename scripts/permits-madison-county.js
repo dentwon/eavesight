@@ -278,17 +278,20 @@ function parseDetail(html) {
   };
 }
 
-async function fetchSearchPage(state, type, log) {
+async function fetchSearchPage(state, type, log, permitNumberPrefix = '') {
   // The page-size dropdown isn't part of the EVENTVALIDATION whitelist on the
   // initial GET — including it here causes a server-side validation failure.
   // Set page size via postback AFTER the initial search instead.
+  //
+  // Tyler eSuite caps unfiltered result lists at 100 rows. Pass a permit-number
+  // prefix (e.g. "0524" for Madison-County 2024 permits) to narrow the query.
   const fields = {
     __EVENTTARGET: '',
     __EVENTARGUMENT: '',
     __VIEWSTATE: state.__VIEWSTATE,
     __VIEWSTATEGENERATOR: state.__VIEWSTATEGENERATOR,
     __EVENTVALIDATION: state.__EVENTVALIDATION,
-    'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': '',
+    'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': permitNumberPrefix,
     'ctl00$ctl00$Content$DefaultContent$ddlPermitType': String(type),
     'ctl00$ctl00$Content$DefaultContent$txtServiceAddress': '',
     'ctl00$ctl00$Content$DefaultContent$btnSearch': 'Search',

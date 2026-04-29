@@ -283,17 +283,21 @@ function parseDetail(html) {
   };
 }
 
-async function fetchSearchPage(state, type, log) {
+async function fetchSearchPage(state, type, log, permitNumberPrefix = '') {
   // The page-size dropdown isn't part of the EVENTVALIDATION whitelist on the
   // initial GET — including it here causes a server-side validation failure.
   // Set page size via postback AFTER the initial search instead.
+  //
+  // Tyler eSuite caps unfiltered result lists at 100 rows. Pass a permit-number
+  // prefix (e.g. "2024") to narrow the query so each year-slice fits under the
+  // cap. The scraper iterates year prefixes when run with --by-year.
   const fields = {
     __EVENTTARGET: '',
     __EVENTARGUMENT: '',
     __VIEWSTATE: state.__VIEWSTATE,
     __VIEWSTATEGENERATOR: state.__VIEWSTATEGENERATOR,
     __EVENTVALIDATION: state.__EVENTVALIDATION,
-    'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': '',
+    'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': permitNumberPrefix,
     'ctl00$ctl00$Content$DefaultContent$ddlPermitType': String(type),
     'ctl00$ctl00$Content$DefaultContent$txtServiceAddress': '',
     'ctl00$ctl00$Content$DefaultContent$btnSearch': 'Search',
@@ -358,8 +362,9 @@ async function fetchPermitDetail(detailId) {
   return r.body;
 }
 
-async function harvestType(type, args, log) {
-  log(`--- type=${type} (${type === 31 ? 'commercial' : 'residential'} roofing) ---`);
+async function harvestType(type, args, log, permitPrefix = '') {
+  const label = `type=${type}${permitPrefix ? ` prefix=${permitPrefix}` : ''}`;
+  log(`--- ${label} (${type === 31 ? 'commercial' : 'residential'} roofing) ---`);
 
   const pageSize = args.pageSize || '50';
 
@@ -373,7 +378,7 @@ async function harvestType(type, args, log) {
   //    per page; the ddlNoOFRows postback resets the filter on the server side
   //    so we accept the smaller pages and walk pagination instead).
   await sleep(PACE_MS);
-  let html = await fetchSearchPage(state, type, log);
+  let html = await fetchSearchPage(state, type, log, permitPrefix);
   state = extractViewState(html);
   let rows = parseResultRows(html);
   log(`page=1 rows=${rows.length}`);
@@ -427,7 +432,7 @@ async function harvestType(type, args, log) {
         __VIEWSTATEGENERATOR: state.__VIEWSTATEGENERATOR,
         __EVENTVALIDATION: state.__EVENTVALIDATION,
         __PREVIOUSPAGE: state.__PREVIOUSPAGE || '',
-        'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': '',
+        'ctl00$ctl00$Content$DefaultContent$txtPermitNumber': permitPrefix,
         'ctl00$ctl00$Content$DefaultContent$ddlPermitType': String(type),
         'ctl00$ctl00$Content$DefaultContent$txtServiceAddress': '',
         'ctl00$ctl00$Content$DefaultContent$txtServiceAddress_TextBoxWatermarkExtender_ClientState': '',
@@ -467,7 +472,34 @@ async function harvestType(type, args, log) {
     pageIdx++;
   }
 
-  log(`type=${type} total unique rows=${allRows.length} (portalReported=${totalReported ?? 'n/a'}, lnkMoreClicks=${usedLnkMore})`);
+  log(`${label} total unique rows=${allRows.length} (portalReported=${totalReported ?? 'n/a'}, lnkMoreClicks=${usedLnkMore})`);
+  return allRows;
+}
+
+async function harvestTypeAllYears(type, args, log) {
+  // Tyler eSuite caps unfiltered queries at 100 results. Iterate by year
+  // prefix to circumvent. Madison-City permit numbers are formatted YYYY-NNNNNNN,
+  // so iterating "2012", "2013", ..., current year produces non-overlapping
+  // slices that fit under the cap.
+  const allRows = [];
+  const seen = new Set();
+  const startYear = args.startYear || 2010;
+  const endYear = args.endYear || (new Date().getFullYear() + 1);
+  for (let y = startYear; y <= endYear; y++) {
+    let yearRows;
+    try {
+      yearRows = await harvestType(type, args, log, String(y));
+    } catch (e) {
+      log(`harvestType(${type}, ${y}) failed: ${e.message}`);
+      continue;
+    }
+    let added = 0;
+    for (const r of yearRows) {
+      if (!seen.has(r.permitNumber)) { seen.add(r.permitNumber); allRows.push(r); added++; }
+    }
+    log(`year=${y} added=${added} cumulative=${allRows.length}`);
+  }
+  log(`type=${type} ALL YEARS total unique rows=${allRows.length}`);
   return allRows;
 }
 
@@ -478,6 +510,11 @@ async function main() {
   const skipDetails = argvRaw.includes('--skip-details');
   const maxPagesArg = argvRaw.find((a) => a.startsWith('--max-pages='));
   args.maxPages = maxPagesArg ? Number(maxPagesArg.slice(12)) : 50;
+  const byYear = argvRaw.includes('--by-year');
+  const startYearArg = argvRaw.find((a) => a.startsWith('--start-year='));
+  const endYearArg = argvRaw.find((a) => a.startsWith('--end-year='));
+  args.startYear = startYearArg ? Number(startYearArg.slice('--start-year='.length)) : 2010;
+  args.endYear = endYearArg ? Number(endYearArg.slice('--end-year='.length)) : (new Date().getFullYear() + 1);
   const types = typesArg
     ? typesArg.slice('--types='.length).split(',').map(Number).filter(Boolean)
     : [TYPE_COMMERCIAL_ROOFING, TYPE_RESIDENTIAL_ROOFING];
@@ -494,7 +531,7 @@ async function main() {
     for (const type of types) {
       let rows;
       try {
-        rows = await harvestType(type, args, log);
+        rows = byYear ? await harvestTypeAllYears(type, args, log) : await harvestType(type, args, log);
       } catch (e) {
         log(`harvestType(${type}) FAILED: ${e.message}`);
         continue;
