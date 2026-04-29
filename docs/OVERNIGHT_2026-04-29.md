@@ -369,3 +369,49 @@ LIMIT 1000;
 40,392 rows total; top 1,000 is the immediate dial-pad / mailer / door-knock list for the next 30 days. After that the 2024-05-08 cohort's claim window expires and the BURNING cohort shrinks dramatically (until the next major storm).
 
 — Code, ✅ extended-overnight wrap
+
+---
+
+## Final pin-cards integration (post-extended-extended addendum)
+
+Closed the loop: the v2 lead-priority + roof-age data now flows into `property_pin_cards` so the dashboard map renders it without code changes.
+
+**Migration applied:** `20260429090000_add_pin_card_lead_priority`
+- Adds 10 top-level columns (`priorityRank`, `priorityLabel`, `urgencyTier`, `severitySubrank`, `daysUntilClaimClose`, `evidenceClass`, `roofAgeYearsV2`, `roofAgeConfidenceV2`, `bestEstimateYearV2`, `bestEstimateKindV2`)
+- 3 indexes for fast top-N + territory + age queries
+- Owner mismatch resolved by applying as `postgres` user (the table is owned by postgres, not eavesight)
+
+**`build-pin-cards-v4.sql` modified** to JOIN `roof_age_v2` + `lead_priority` + `top_leads_burning`. Populates new top-level columns AND embeds matching fields in:
+- `payloadFree` — Scout sees bucket-only (`priorityBucket`, `roofAgeV2Band`, `roofEvidenceQuality`)
+- `payloadPro` — Pro/Enterprise sees full detail incl. `roofAgeEvidence` audit trail JSON
+
+**`refresh-roof-signals.sh` step 6/6 = pin-cards rebuild** so the cron pipeline keeps the map fresh end-to-end.
+
+**Spec doc for Desktop's MetroMap.tsx work:** `docs/PIN_CARD_V2_SCHEMA.md`. Suggests pin-color-by-priorityRank, pin-size-by-severitySubrank, "9 DAYS LEFT" badge logic, default filter, top-20 sidebar query. Desktop owns the visual treatment; the data is now there for them to read.
+
+**Prisma schema follow-up:** the new columns are NOT yet in `apps/backend/prisma/schema.prisma` `PropertyPinCard` model declarations. Migration file is committed; schema.prisma needs hand-edits to mirror, on next prisma cycle. Same pattern as the MS v2 migration committed earlier.
+
+### Final operational scripts ready
+
+```
+scripts/refresh-roof-signals.sh    cron-able 6-step pipeline (every 4h recommended)
+scripts/check-roof-status.sh       at-a-glance pipeline state
+scripts/export-burning-leads.sh    CSV dump for sales reps (zip-filterable)
+```
+
+```
+exports/burning_leads_top1000_*.csv   1k actionable leads
+exports/burning_leads_top5000_*.csv   5k actionable leads
+exports/burning_leads_top100_*.csv    100 spot-check sample
+```
+
+### TL;DR closing tally
+
+- **30 commits** this session on `harden/security-2026-04-26`
+- **Roof-signal coverage** went from 461 → 1,054 ground-truth (+128%) AND 173,800+ explicit signals across 9 sources
+- **Lead priority** materialized: 37,171 BURNING + 3,221 LIVE + 136,803 AGED-NO-STORM cohorts ranked
+- **Map integration** wired through to `property_pin_cards` with v2 fields in both payloadFree (Scout-tier) and payloadPro (paid-tier)
+- **Sales-ready CSVs** sitting in `exports/` for immediate use
+- **Comprehensive specs + handoffs** for Desktop browser-extension scrape (Huntsville GovBuilt) and MetroMap.tsx visual treatment
+
+— Code, ✅ done done
