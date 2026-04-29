@@ -6,6 +6,36 @@
 
 ---
 
+## Even-later addendum — Census-batch geocoder fixes 666 stuck permits
+
+The fuzzy-ILIKE address resolver was leaving 666 roofing permits stuck because PDF-extracted addresses are messy ("1820 6th Ave Se Unit P, Q Remove top layer..."). New script `scripts/geocode-and-resolve-permits.js` cleans the address (strips work-description trailers), runs the Census Batch Geocoder (free, 10k addrs/request), then nearest-property-within-66m.
+
+**Net gain: +193 unique properties with high-confidence reroof signal.**
+
+| Source | Before | After geocode |
+|---|---|---|
+| permit.decatur | 461 | **574** (+113) |
+| permit.madison-city | 171 | 171 |
+| madison-city (legacy 210 permits, never resolved) | 0 | **140** (+140) |
+| permit.madison-county | 98 | 98 |
+| **Total true ground-truth roof ages** | **797 → 990** | **+24%** |
+
+### Per-region penetration (using lat/lon, after geocode)
+
+| Region | Properties | True ages | % | Gap to Decatur 1.81% |
+|---|---|---|---|---|
+| **Decatur** | 30,209 | 548 | **1.81%** (benchmark) | — |
+| Madison City | 27,973 | 250 | 0.89% | −256 |
+| Owens Cross / Hampton | 27,052 | 31 | 0.12% | −459 |
+| Madison County north | 38,087 | 55 | 0.14% | −635 |
+| Limestone / Athens | 15,116 | 3 | 0.02% | −271 |
+| **Huntsville core** | 61,215 | 60 | **0.10%** | **−1,048** |
+| Other rural | 41,573 | 42 | 0.10% | −710 |
+
+**Total deficit to hit Decatur parity: ~3,400 more dated reroof signals.** Huntsville core (1,048) is the single biggest gap — that's the GovBuilt scrape territory (Cloudflare-gated, needs Playwright).
+
+---
+
 ## Late-session addendum — storm-overlay + MLS + HMDA breakthrough
 
 Working with you live in the early morning hours, we filled the Huntsville/Madison permit-data gap WITHOUT needing the Cloudflare-gated GovBuilt portal. The angle: yearBuilt is the original-roof default, but a major storm event in the property's lifetime overrides that with a probabilistic replacement signal. We had every piece of data needed — 6.59M `property_storms` rows × 5,274 AL hail events — just not connected.
