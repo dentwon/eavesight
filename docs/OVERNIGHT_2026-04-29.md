@@ -9,7 +9,7 @@
 ## TL;DR
 
 What you'll see at the top of the dashboard tomorrow:
-- **279 NEW high-confidence reroof signals** (Madison-City + Madison-County permits) on top of the 461 Decatur baseline → **740 total reroof_permit signals across 681 unique properties** (vs. 461 / 461 unique at session start — that's a +48% expansion of our highest-confidence ground-truth set in one night).
+- **279 NEW high-confidence reroof signals** (Madison-City + Madison-County permits) on top of the 461 Decatur baseline → **730 total reroof_permit signals across 681 unique properties** (vs. 461 / 461 unique at session start — that's a +48% expansion of our highest-confidence ground-truth set in one night).
 - **+86 new Madison-City building_permits** unlocked by the `--by-year` flag that bypasses the Tyler eSuite 100-result-per-query cap (Madison-City unfiltered query had been hiding ~50% of the actual permits).
 - **242,987 building footprints (100% coverage) backfilled with MS v2 capture dates** — every property in N-AL now has a "building existed by year X" anchor.
 - **10 OSM start_date anchors** for landmark commercial properties.
