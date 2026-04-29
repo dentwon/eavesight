@@ -286,10 +286,23 @@ function parseDetail(html) {
  * yields just that year's permits.
  */
 function fmtCountyYearPrefix(year) {
-  if (year >= 2017) return String(year);                      // "2024"
-  if (year >= 2007) return String(year % 100).padStart(2, '0') + '-'; // "16-"
-  if (year >= 2005) return '0' + String(year % 100).padStart(2, '0'); // "0506"
+  if (year >= 2017) return String(year);                                // "2024"
+  if (year >= 2007) return String(year % 100).padStart(2, '0') + '-';   // "16-"
+  if (year >= 2005) return '0' + String(year % 100).padStart(2, '0');   // 2005 → "005"
   return null;
+}
+
+/* For 2017+ years that hit the 100-cap, drill down by appending sequence
+ * digits 0-9 to the year prefix (e.g. "2024-00000", "2024-00001", ...).
+ * Each sub-prefix typically returns under 100 results.
+ * Returns the list of prefixes to try; '' (no drill) if year shouldn't drill.
+ */
+function countyDrillPrefixes(year, parentPrefix) {
+  if (year < 2017) return null;
+  // Sequence numbers in our existing data range up to 9999 — drill 0-9 should suffice.
+  // Format: "YYYY-NNNNNNNN", so "2024-0" matches sequence < 1,000,000 (i.e. all)
+  // Try "2024-00000", "2024-00001"... "2024-00009" — covers 0-99,999 sequence range.
+  return Array.from({ length: 10 }, (_, i) => `${parentPrefix}-0000${i}`);
 }
 
 async function fetchSearchPage(state, type, log, permitNumberPrefix = '') {
@@ -493,6 +506,8 @@ async function harvestTypeAllYears(type, args, log) {
   for (let y = startYear; y <= endYear; y++) {
     const prefix = fmtCountyYearPrefix(y);
     if (!prefix) { log(`year=${y} no-prefix-format-known, skipping`); continue; }
+
+    // First: try the year prefix itself
     let yearRows;
     try {
       yearRows = await harvestType(type, args, log, prefix);
@@ -505,6 +520,27 @@ async function harvestTypeAllYears(type, args, log) {
       if (!seen.has(r.permitNumber)) { seen.add(r.permitNumber); allRows.push(r); added++; }
     }
     log(`year=${y} prefix=${prefix} added=${added} cumulative=${allRows.length}`);
+
+    // If we hit the ~100 cap, drill into sub-prefixes (only for 2017+ format).
+    if (yearRows.length >= 100) {
+      const subs = countyDrillPrefixes(y, prefix);
+      if (subs) {
+        for (const sub of subs) {
+          let subRows;
+          try {
+            subRows = await harvestType(type, args, log, sub);
+          } catch (e) {
+            log(`harvestType(${type}, sub=${sub}) failed: ${e.message}`);
+            continue;
+          }
+          let subAdded = 0;
+          for (const r of subRows) {
+            if (!seen.has(r.permitNumber)) { seen.add(r.permitNumber); allRows.push(r); subAdded++; }
+          }
+          log(`year=${y} sub=${sub} added=${subAdded} cumulative=${allRows.length}`);
+        }
+      }
+    }
   }
   log(`type=${type} ALL YEARS total unique rows=${allRows.length}`);
   return allRows;
