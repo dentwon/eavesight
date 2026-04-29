@@ -164,8 +164,8 @@ ms_v2_existed_events AS (
   WHERE bf.capture_dates_range_end IS NOT NULL
 ),
 
--- 6) OSM start_date (future scrape). Same shape as ms_v2 but at slightly
---    higher confidence on the small landmark set.
+-- 6) OSM start_date. Same shape as ms_v2 but at slightly higher confidence
+--    on the small landmark set.
 osm_events AS (
   SELECT
     s."propertyId" AS property_id,
@@ -179,6 +179,52 @@ osm_events AS (
     AND s."signalDate" IS NOT NULL
 ),
 
+-- 7) Storm-window inference: for properties with a major storm event in their
+--    lifetime, the roof was very likely repaired or replaced within the post-
+--    event insurance window. Confidence is severity-tiered (see
+--    compute-storm-implied-roof-signals.sql).
+storm_inference_events AS (
+  SELECT
+    s."propertyId" AS property_id,
+    EXTRACT(YEAR FROM s."signalDate")::int AS event_year,
+    'replacement' AS kind,
+    COALESCE(s.confidence::float, 0.40) AS weight,
+    s.source AS evidence_source,
+    s."sourceRecordId" AS evidence_record
+  FROM property_signals s
+  WHERE s."signalType" = 'implied_replacement_post_storm'
+    AND s."signalDate" IS NOT NULL
+),
+
+-- 8) MLS listing roof-year mentions (homeowner-asserted via realtor). High
+--    confidence when realtor types an explicit year; lower when category-only.
+mls_year_events AS (
+  SELECT
+    s."propertyId" AS property_id,
+    EXTRACT(YEAR FROM s."signalDate")::int AS event_year,
+    'replacement' AS kind,
+    COALESCE(s.confidence::float, 0.80) AS weight,
+    s.source AS evidence_source,
+    s."sourceRecordId" AS evidence_record
+  FROM property_signals s
+  WHERE s."signalType" = 'mls_roof_year'
+    AND s."signalDate" IS NOT NULL
+),
+mls_mention_events AS (
+  -- Roof category-only mentions (no year): treat as a "replacement happened
+  -- recently — assume listing year ± 2 yr window" and confidence floor.
+  SELECT
+    s."propertyId" AS property_id,
+    COALESCE(EXTRACT(YEAR FROM s."signalDate")::int,
+             EXTRACT(YEAR FROM s."observedAt")::int) AS event_year,
+    'replacement' AS kind,
+    COALESCE(s.confidence::float, 0.50) AS weight,
+    s.source AS evidence_source,
+    s."sourceRecordId" AS evidence_record
+  FROM property_signals s
+  WHERE s."signalType" IN ('mls_roof_mention', 'mls_roof_material')
+),
+
 -- All events stacked
 all_events AS (
   SELECT * FROM permit_events
@@ -188,6 +234,9 @@ all_events AS (
   UNION ALL SELECT * FROM yearbuilt_events
   UNION ALL SELECT * FROM ms_v2_existed_events
   UNION ALL SELECT * FROM osm_events
+  UNION ALL SELECT * FROM storm_inference_events
+  UNION ALL SELECT * FROM mls_year_events
+  UNION ALL SELECT * FROM mls_mention_events
 ),
 
 -- Pick the most recent replacement (weight ≥ 0.50). If none, fall back to
