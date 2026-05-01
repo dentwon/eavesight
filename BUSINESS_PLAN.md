@@ -29,9 +29,9 @@ Eavesight is an integrated B2B SaaS platform that gives roofing contractors a si
 
 **Subscription SaaS with metered property reveals, no per-user fees:**
 
-- **Scout**: Free — 5 property reveals/month, county-wide storm alerts, basic property data (try before you buy)
-- **Business**: $99/month — 50 reveals/month, zip-code storm alerts, Hot/Warm/Cold lead tiers, 1 county map, 1 canvassing route/day, 5 roof-measurement credits (solo roofers / small crews)
-- **Pro**: $249/month — 200 reveals/month, property-level push alerts, full 0-100 lead scoring, multi-county access, unlimited canvassing routes, owner name/phone/mailing address, 15 roof-measurement credits (serious outbound)
+- **Starter**: Free — 5 property reveals/month, county-wide storm alerts, basic property data (try before you buy)
+- **Pro**: $99/month — 50 reveals/month, zip-code storm alerts, Hot/Warm/Cold lead tiers, 1 county map, 1 canvassing route/day, 5 roof-measurement credits (solo roofers / small crews)
+- **Business**: $249/month — 200 reveals/month, property-level push alerts, full 0-100 lead scoring, multi-county access, unlimited canvassing routes, owner name/phone/mailing address, 15 roof-measurement credits (serious outbound)
 - **Enterprise**: Talk to Sales — unlimited reveals, custom scoring, API access, territory locking, team routing + GPS, 40 roof-measurement credits, priority support (multi-crew ops)
 
 All paid plans: 14-day free trial, no contract, cancel anytime. Launch promo: **first 100 users get 3 months free** (currently live on landing page).
